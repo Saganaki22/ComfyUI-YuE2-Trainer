@@ -1,4 +1,4 @@
-"""Convert a YuE2-Trainer LoRA into ComfyUI-native (LoraLoader) format.
+"""Native ComfyUI LoRA writer for YuE2-Trainer LoRAs.
 
 The trainer stores HF-layout keys with separate projections:
     model.layers.N.nar_self_attn.{q,k,v,o}_proj.lora_{down,up}.weight
@@ -23,10 +23,8 @@ always multiplies by exactly 1.0.
 from __future__ import annotations
 
 import re
-from pathlib import Path
 
 import torch
-from safetensors.torch import save_file
 
 from . import lora as lora_mod
 
@@ -166,12 +164,3 @@ def native_metadata(source_metadata: dict, source_file: str = "") -> dict:
         if key in source_metadata:
             meta[f"source_{key}"] = source_metadata[key]
     return {k: str(v) for k, v in meta.items()}
-
-
-def convert_lora_to_native(lora_path, output_path) -> dict:
-    """Convert one LoRA file on disk; returns a conversion report dict."""
-    lora = lora_mod.load_lora(lora_path)
-    out, report = convert_tensors(lora.tensors, lora.metadata)
-    save_file(out, str(output_path),
-              metadata=native_metadata(lora.metadata, Path(lora_path).name))
-    return {**report, "output": str(output_path)}

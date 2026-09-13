@@ -16,9 +16,9 @@ a 1.5B NAR flow-matching branch (renders 64-channel VAE latents into sound), and
 2. trains **LoRA adapters on the NAR branch only**, with the released flow-matching
    objective, conditioned on the checkpoint-native text prefix
    (`[Tags] your_trigger_word, caption ...`),
-3. saves a standard `*.safetensors` LoRA into `models/loras`, and
-4. can **merge** that LoRA into a new `models/yue2/<name>` folder so you generate with
-   the regular YuE2 nodes you already have.
+3. saves a standard `*.safetensors` LoRA into `models/loras` in **native ComfyUI
+   format** — load it with the stock `LoraLoaderModelOnly` node on the native
+   YuE2 checkpoint and generate, no conversion needed.
 
 The AR "composer" branch stays frozen (m-a-p has not released an audio→token encoder or
 training code), so this is a *style/timbre* LoRA, not a full voice clone.
@@ -28,32 +28,25 @@ License note: YuE2 weights are CC BY-NC 4.0 — non-commercial use only.
 
 - ComfyUI (Windows portable / Easy-Install works) with an NVIDIA GPU;
   **24 GB VRAM recommended** (tested on an RTX 5090 Laptop 24 GB).
-- [ComfyUI-Olm-YuE2](https://github.com/o-l-l-i/ComfyUI-Olm-YuE2) installed in
-  `custom_nodes` — the trainer reuses its vendored YuE2 modeling code at runtime
-  (nothing is bundled or copied from it; it must be installed separately).
+- **Fully standalone** — no other custom nodes required. The official YuE2
+  model code (m-a-p's `yue2_infer`, Apache-2.0, unmodified) is bundled in
+  `trainer_core/yue2_ref/`.
 - No extra pip packages. Optional: `bitsandbytes` for the 8-bit optimizer.
 
-### Model downloads and placement
+### Model download and placement
 
-Download the YuE2 models from Hugging Face (by downloading you accept the
+Only **one file** is needed — the native all-in-one YuE2 checkpoint (by
+downloading you accept the
 [CC BY-NC 4.0](https://creativecommons.org/licenses/by-nc/4.0/) model license):
 
-| Model | Source | Required files | Put them in |
-| --- | --- | --- | --- |
-| YuE2-3B | [huggingface.co/m-a-p/YuE2-3B](https://huggingface.co/m-a-p/YuE2-3B) | `model.safetensors`, `config.json`, `qwen.tiktoken` | `ComfyUI/models/yue2/` |
-| YuE2-Vae | [huggingface.co/m-a-p/YuE2-Vae](https://huggingface.co/m-a-p/YuE2-Vae) | `model.safetensors`, `config.json` | `ComfyUI/models/yue2_vae/` |
+| File | Source | Put it in |
+| --- | --- | --- |
+| `yue2_3b_bf16.safetensors` (~7.8 GB) | [huggingface.co/Comfy-Org/YuE2](https://huggingface.co/Comfy-Org/YuE2) (official ComfyUI repack of [m-a-p/YuE2-3B](https://huggingface.co/m-a-p/YuE2-3B)) | `ComfyUI/models/checkpoints/` |
 
-Place the files directly in these folders (same layout the
-[ComfyUI-Olm-YuE2](https://github.com/o-l-l-i/ComfyUI-Olm-YuE2#models) inference
-nodes use). The trainer's loader dropdowns list every valid folder found under
-`models/yue2` / `models/yue2_vae`; extra locations can be added via
-`extra_model_paths.yaml`.
-
-For the **native** ComfyUI path (optional, for generation with the stock
-LoraLoader): place the native single-file YuE2 checkpoint in
-`ComfyUI/models/checkpoints/` (e.g. `yue2.safetensors`, containing
-`model.diffusion_model` / `text_encoders` / `vae` weights).
-Training always uses the `models/yue2` + `models/yue2_vae` folders above.
+This is the same file the native ComfyUI YuE2 generation nodes use — it
+contains the language model, the acoustic (NAR) branch, the VAE and the
+tokenizer, so one download covers training *and* generation. Use the **bf16**
+file; the INT8 quantized variant cannot be trained.
 
 ## Install
 
@@ -83,39 +76,27 @@ cd ComfyUI/custom_nodes/ComfyUI-YuE2-Trainer
 git pull
 ```
 
-Make sure the [requirements](#requirements) above are installed
-(ComfyUI-Olm-YuE2 + the YuE2 model folders), then **restart ComfyUI**.
-Five nodes appear under **YuE2/Training**.
+Make sure the [requirements](#requirements) above are met (the YuE2 checkpoint
+is in place), then **restart ComfyUI**.
+Two nodes appear under **YuE2/Training**.
 
 ## Usage
 
-1. **YuE2 Train Model Loader** — pick your YuE2 model + VAE (same folders as inference).
-2. **YuE2 Training Dataset (audio folder)** — point `audio_folder` at your song folder.
+1. **YuE2 Training Dataset (audio folder)** — pick the YuE2 `checkpoint` and
+   point `audio_folder` at your song folder.
    - Optional: place `songname.txt` next to `songname.mp3` with a caption
      (style / instruments / voice description) and set `caption_mode = txt_file`.
-   - `clip_seconds` 10 is a good default (250 latent frames). The node encodes and
-     caches latents; rerunning is instant unless you change files or clip length.
-3. **YuE2 LoRA Trainer** — set `trigger_word`, `steps` (default 3000),
-   `learning_rate` (1e-4), `rank`/`alpha` (32/32), and `lora_name`. Queue and wait.
-   - By default the LoRA is written in **native ComfyUI format** — load it with
+   - `clip_seconds` 10 is a good default (250 latent frames). The node encodes
+     with the checkpoint's built-in VAE and caches latents; rerunning is
+     instant unless you change files or clip length.
+2. **YuE2 LoRA Trainer** — connect the dataset, pick the same `checkpoint`,
+   set `trigger_word`, `steps` (default 3000), `learning_rate` (1e-4),
+   `rank`/`alpha` (32/32), and `lora_name`. Queue and wait.
+   - The LoRA is written in **native ComfyUI format** — load it with
      `LoraLoaderModelOnly` on the native YuE2 checkpoint, no conversion needed.
-   - Turn on **`write_olm_format`** only if you plan to use the
-     **YuE2 LoRA Merge (Export)** node (that path needs the Olm/HF layout).
    - Progress bar in ComfyUI; losses appear in the console and in the node's
      `training_log` output.
    - Rough speed estimate on a 4090: ~1–3 s/step at 10 s clips → 1000 steps ≈ 25–50 min.
-4. **YuE2 LoRA Merge (Export)** — merge the LoRA into a new model folder
-   `models/yue2/<output_name>` (one-time, ~7 GB write). Select that folder in the
-   normal **YuE2 Model Loader** and generate.
-
-### Using your LoRA with the NATIVE ComfyUI YuE2 implementation
-
-5. **YuE2 LoRA Convert (to Native)** — converts any trainer LoRA into ComfyUI-native
-   format (separate q/k/v and gate/up adapters are fused losslessly into the native
-   `qkv_proj` / `gate_up_proj` layout). The converted file lands in `models/loras`
-   and loads with the stock **LoraLoaderModelOnly** node on the native checkpoint:
-   `CheckpointLoaderSimple (checkpoints/yue2.safetensors)` → `LoraLoaderModelOnly`
-   → native YuE2 sampler. Strength sliders work as usual.
 
 ### Generating with your LoRA
 
@@ -145,16 +126,15 @@ training regime is larger.
   tokens for arbitrary audio are not available from m-a-p.
 - One training run uses the GPU exclusively; other loaded ComfyUI models are
   unloaded when training starts.
-- One training run uses the GPU exclusively; other loaded ComfyUI models are
-  unloaded when training starts.
 
 ## Example workflows
 
 Ready-to-use workflows live in [`example_workflows/`](example_workflows) —
 drag the JSON into the ComfyUI window:
 
-- **`01_yue2_lora_training.json`** — model loader → dataset → trainer.
-  Set your `audio_folder`, `trigger_word` and `lora_name`, then Queue.
+- **`01_yue2_lora_training.json`** — dataset → trainer (both load from the
+  native checkpoint). Set your `audio_folder`, `trigger_word` and `lora_name`,
+  then Queue.
 - **`02_yue2_native_generate_with_lora.json`** — native generation with your
   LoRA: `CheckpointLoaderSimple` (native `yue2.safetensors`) →
   `LoraLoaderModelOnly` → `YuE2 Generate Music` → `KSampler` → `VAEDecode` →
@@ -169,13 +149,13 @@ drag the JSON into the ComfyUI window:
 
 - **[YuE2-3B](https://huggingface.co/m-a-p/YuE2-3B)** by
   [m-a-p](https://huggingface.co/m-a-p) — model architecture, weights and the
-  reference inference code this trainer builds on. If you use YuE2 in research,
-  cite the YuE paper ([arXiv:2503.08638](https://arxiv.org/abs/2503.08638)).
-- **[ComfyUI-Olm-YuE2](https://github.com/o-l-l-i/ComfyUI-Olm-YuE2)** by
-  Olli Sorjonen — the ComfyUI inference integration whose vendored YuE2 modeling
-  code this package imports at runtime. Required dependency; not bundled.
+  official `yue2_infer` code that is bundled unmodified in
+  `trainer_core/yue2_ref/`. If you use YuE2 in research, cite the YuE paper
+  ([arXiv:2503.08638](https://arxiv.org/abs/2503.08638)).
 - **[ComfyUI](https://github.com/comfyanonymous/ComfyUI)** — including its native
   YuE2 implementation that the native-format LoRA output targets.
+- **[Comfy-Org/YuE2](https://huggingface.co/Comfy-Org/YuE2)** — the official
+  single-file checkpoint repack the trainer can load directly.
 
 ## License
 
@@ -185,17 +165,17 @@ This package's own code is published by **Starnodes** under the **MIT License**
 Third-party components keep their own licenses and **must be respected**:
 
 - **YuE2 model weights** ([YuE2-3B](https://huggingface.co/m-a-p/YuE2-3B),
-  [YuE2-Vae](https://huggingface.co/m-a-p/YuE2-Vae)) are licensed
+  [YuE2-Vae](https://huggingface.co/m-a-p/YuE2-Vae), and the
+  [Comfy-Org/YuE2](https://huggingface.co/Comfy-Org/YuE2) single-file repack)
+  are licensed
   **[CC BY-NC 4.0](https://creativecommons.org/licenses/by-nc/4.0/)** by m-a-p —
   **non-commercial use only, with attribution**. LoRAs trained with this tool are
   derivatives of those weights, so the same non-commercial terms apply to them
   and to any audio generated with them. By downloading the models you accept
   those terms on Hugging Face.
-- **YuE2 reference inference code** (used at runtime via ComfyUI-Olm-YuE2):
-  [Apache License 2.0](https://www.apache.org/licenses/LICENSE-2.0), © m-a-p.
-- **[ComfyUI-Olm-YuE2](https://github.com/o-l-l-i/ComfyUI-Olm-YuE2)**:
-  source-available license, © Olli Sorjonen. This package does **not** copy,
-  bundle, or modify it — it is a separate install and remains governed by its
-  own [terms](https://github.com/o-l-l-i/ComfyUI-Olm-YuE2/blob/main/LICENSE.txt).
+- **YuE2 reference inference code** (bundled unmodified in
+  `trainer_core/yue2_ref/`): [Apache License 2.0](https://www.apache.org/licenses/LICENSE-2.0),
+  © m-a-p; its third-party notices are preserved in
+  `trainer_core/yue2_ref/licenses/`.
 - Your training data is your own responsibility: only train on audio you have
   the rights to use.

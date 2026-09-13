@@ -26,8 +26,10 @@ IMPORTANT — THIRD-PARTY LICENSES THAT APPLY WHEN USING THIS SOFTWARE
 
 This license covers only the original code of this package
 (ComfyUI-YuE2-Trainer, published by Starnodes). The Software does not include
-any model weights or third-party code. When using it, the following
-third-party licenses apply and must be respected:
+any model weights. It does bundle unmodified third-party Apache-2.0 reference
+code in trainer_core/yue2_ref/ (see item 2 below), which remains under its own
+license. When using the Software, the following third-party licenses apply and
+must be respected:
 
 1. YuE2 model weights (m-a-p/YuE2-3B, m-a-p/YuE2-Vae, m-a-p/YuE2-Vae-legacy)
    Licensor: m-a-p
@@ -40,18 +42,14 @@ third-party licenses apply and must be respected:
    these weights; the CC BY-NC 4.0 terms apply to them and to outputs
    generated with them.
 
-2. YuE2 reference inference code (imported at runtime, not bundled)
+2. YuE2 reference inference code (BUNDLED, unmodified, in
+   trainer_core/yue2_ref/; from m-a-p's official yue2_infer package)
    Licensor: m-a-p
    License: Apache License 2.0
    https://www.apache.org/licenses/LICENSE-2.0
+   The full license text and third-party notices are preserved in
+   trainer_core/yue2_ref/licenses/.
 
-3. ComfyUI-Olm-YuE2 (required dependency, installed separately, not bundled)
-   Licensor: Olli Sorjonen
-   License: source-available "License & Terms of Use" — redistribution,
-   resale, rebranding or claiming authorship of that code is prohibited
-   without explicit written permission.
-   https://github.com/o-l-l-i/ComfyUI-Olm-YuE2/blob/main/LICENSE.txt
-
-4. ComfyUI
+3. ComfyUI
    https://github.com/comfyanonymous/ComfyUI
    License: GPL-3.0

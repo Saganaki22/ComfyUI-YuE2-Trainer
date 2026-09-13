@@ -1,10 +1,15 @@
 """ComfyUI node definitions for YuE2 LoRA training.
 
 Node set (category "YuE2/Training"):
-  1. YuE2 Train Model Loader   -> picks the base model + VAE folders
-  2. YuE2 Training Dataset     -> scans an audio folder, caches VAE latents
-  3. YuE2 LoRA Trainer         -> flow-matching LoRA training on the NAR branch
-  4. YuE2 LoRA Merge (Export)  -> merges a LoRA into a new models/yue2 folder
+  1. YuE2 Training Dataset  -> scans an audio folder, caches VAE latents
+                               (VAE comes from the native checkpoint)
+  2. YuE2 LoRA Trainer      -> flow-matching LoRA training on the NAR branch;
+                               writes native ComfyUI LoRAs (LoraLoaderModelOnly
+                               on the YuE2 checkpoint)
+
+Both nodes load everything (AR model, NAR branch, VAE, tokenizer) directly
+from the native all-in-one checkpoint in models/checkpoints — the same file
+used for generation. No separate model/VAE folders are needed.
 """
 from __future__ import annotations
 
@@ -23,9 +28,24 @@ def _folder_paths():
     return folder_paths
 
 
-def _model_paths():
-    from .trainer_core.vendor import import_model_paths
-    return import_model_paths()(_folder_paths())
+def _checkpoint_choices():
+    fp = _folder_paths()
+    return fp.get_filename_list("checkpoints") or ["no checkpoints found — see README"]
+
+
+def _resolve_yue2_checkpoint(name: str) -> Path:
+    """Resolve a checkpoints-folder entry and validate it is the native
+    YuE2 all-in-one bf16 checkpoint."""
+    from .trainer_core import native_ckpt
+    fp = _folder_paths()
+    ckpt_path = Path(fp.get_full_path_or_raise("checkpoints", name))
+    if not native_ckpt.is_native_yue2_checkpoint(ckpt_path):
+        raise ValueError(
+            f"{name} is not a native YuE2 all-in-one checkpoint. Use the bf16 "
+            "YuE2 checkpoint (checkpoints/yue2_3b_bf16.safetensors from "
+            "huggingface.co/Comfy-Org/YuE2); quantized or non-YuE2 checkpoints "
+            "cannot be trained.")
+    return ckpt_path
 
 
 def _free_memory():
@@ -47,32 +67,6 @@ def _unload_comfy_models():
         pass
 
 
-class YuE2TrainModelLoader:
-    """Select the YuE2 base model and VAE used for training."""
-
-    @classmethod
-    def INPUT_TYPES(cls):
-        paths = _model_paths()
-        models = paths.list("yue2") or ["No models found — see YuE2 Model Loader"]
-        vaes = paths.list("yue2_vae") or ["No VAEs found — see YuE2 Model Loader"]
-        return {"required": {
-            "model": (models, {"tooltip": "YuE2 model folder (models/yue2), same as the inference loader."}),
-            "vae": (vaes, {"tooltip": "YuE2 VAE folder (models/yue2_vae). Used once to encode your audio into latents."}),
-        }}
-
-    RETURN_TYPES = ("YUE2_TRAIN_BUNDLE",)
-    RETURN_NAMES = ("train_bundle",)
-    FUNCTION = "load"
-    CATEGORY = CATEGORY
-
-    def load(self, model, vae):
-        paths = _model_paths()
-        model_dir = paths.resolve("yue2", model)
-        vae_dir = paths.resolve("yue2_vae", vae)
-        return ({"model_dir": model_dir, "vae_dir": vae_dir,
-                 "model_name": model, "vae_name": vae},)
-
-
 class YuE2TrainingDataset:
     """Scan a folder of mp3/wav/flac (+ optional same-named .txt captions)
     and encode everything to cached YuE2 VAE latents."""
@@ -80,7 +74,10 @@ class YuE2TrainingDataset:
     @classmethod
     def INPUT_TYPES(cls):
         return {"required": {
-            "bundle": ("YUE2_TRAIN_BUNDLE",),
+            "checkpoint": (_checkpoint_choices(), {
+                "tooltip": "Native YuE2 all-in-one checkpoint (models/checkpoints) — "
+                           "its built-in VAE encodes your audio. Same file you "
+                           "use for generation."}),
             "audio_folder": ("STRING", {"default": "",
                 "tooltip": "Absolute path to the folder with your training songs "
                            "(mp3/wav/flac; optional .txt caption next to each file, same name)."}),
@@ -101,12 +98,13 @@ class YuE2TrainingDataset:
     FUNCTION = "build"
     CATEGORY = CATEGORY
 
-    def build(self, bundle, audio_folder, clip_seconds, caption_mode,
+    def build(self, checkpoint, audio_folder, clip_seconds, caption_mode,
               default_caption, cache_folder, force_reencode):
         import torch
         from .trainer_core.vendor import import_yue2
-        from .trainer_core import data as data_mod
+        from .trainer_core import data as data_mod, native_ckpt
 
+        ckpt_path = _resolve_yue2_checkpoint(checkpoint)
         folder = Path(audio_folder.strip().strip('"'))
         if cache_folder.strip():
             cache_dir = Path(cache_folder.strip().strip('"'))
@@ -119,8 +117,7 @@ class YuE2TrainingDataset:
 
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         _, modeling_vae, _, _ = import_yue2()
-        vae = modeling_vae.YuE2VAE.from_pretrained(
-            bundle["vae_dir"], decoder_only=False, device=device, local_files_only=True)
+        vae = native_ckpt.build_vae_from_native(ckpt_path, modeling_vae, device=device)
         try:
             dataset = data_mod.build_dataset(
                 vae, folder, cache_dir, clip_seconds, caption_mode,
@@ -139,12 +136,15 @@ class YuE2LoRATrainer:
     @classmethod
     def INPUT_TYPES(cls):
         return {"required": {
-            "bundle": ("YUE2_TRAIN_BUNDLE",),
             "dataset": ("YUE2_TRAIN_DATASET",),
+            "checkpoint": (_checkpoint_choices(), {
+                "tooltip": "Native YuE2 all-in-one checkpoint (models/checkpoints) "
+                           "the LoRA is trained on — pick the same file you "
+                           "generate with."}),
             "trigger_word": ("STRING", {"default": "mystyle",
                 "tooltip": "Token/word placed at the start of the style prompt. "
                            "Use it in your style prompt at generation time (cot=off works best)."}),
-            "steps": ("INT", {"default": 1000, "min": 1, "max": 100000}),
+            "steps": ("INT", {"default": 3000, "min": 1, "max": 100000}),
             "learning_rate": ("FLOAT", {"default": 1e-4, "min": 1e-7, "max": 1e-2, "step": 1e-6}),
             "rank": ("INT", {"default": 32, "min": 1, "max": 256}),
             "alpha": ("FLOAT", {"default": 32.0, "min": 0.1, "max": 512.0, "step": 0.1}),
@@ -169,11 +169,6 @@ class YuE2LoRATrainer:
             "log_every": ("INT", {"default": 10, "min": 1, "max": 1000}),
             "save_every": ("INT", {"default": 0, "min": 0, "max": 100000,
                 "tooltip": "Save an intermediate LoRA every N steps (0 = only the final one)."}),
-            "write_olm_format": ("BOOLEAN", {"default": False,
-                "tooltip": "OFF (default): write the LoRA in native ComfyUI format "
-                           "(loads with LoraLoaderModelOnly on the native YuE2 checkpoint). "
-                           "ON: write the HF/Olm layout instead (needed for the "
-                           "YuE2 LoRA Merge (Export) node)."}),
         }}
 
     RETURN_TYPES = ("STRING", "STRING")
@@ -181,13 +176,13 @@ class YuE2LoRATrainer:
     FUNCTION = "train"
     CATEGORY = CATEGORY
 
-    def train(self, bundle, dataset, trigger_word, steps, learning_rate, rank,
+    def train(self, dataset, checkpoint, trigger_word, steps, learning_rate, rank,
               alpha, lora_dropout, target_preset, lora_name, seed, optimizer,
               lr_scheduler, warmup_steps, grad_accum, caption_dropout,
-              t_sampling, max_grad_norm, log_every, save_every, write_olm_format):
+              t_sampling, max_grad_norm, log_every, save_every):
         import torch
         from .trainer_core.vendor import import_yue2
-        from .trainer_core import train as train_mod
+        from .trainer_core import train as train_mod, native_ckpt
 
         trigger_word = trigger_word.strip()
         lora_name = lora_name.strip()
@@ -196,6 +191,7 @@ class YuE2LoRATrainer:
         if not lora_name or any(c in lora_name for c in '\\/:*?"<>|'):
             raise ValueError("lora_name must be a valid file name (no path characters)")
 
+        ckpt_path = _resolve_yue2_checkpoint(checkpoint)
         _unload_comfy_models()
         _free_memory()
 
@@ -204,12 +200,12 @@ class YuE2LoRATrainer:
         # model load and the whole training loop (all tensors created inside
         # this block are normal, grad-capable tensors).
         with torch.inference_mode(False):
-            modeling_yue2, _, protocol, tokenization_yue2 = import_yue2()
+            modeling_yue2, _, protocol, _ = import_yue2()
             device = "cuda" if torch.cuda.is_available() else "cpu"
-            model = modeling_yue2.YuE2ForCausalLM.from_pretrained(
-                bundle["model_dir"], local_files_only=True,
-                torch_dtype=torch.bfloat16, low_cpu_mem_usage=True)
-            tokenizer = tokenization_yue2.YuE2TextTokenizer(Path(bundle["model_dir"]) / "qwen.tiktoken")
+            model = native_ckpt.build_lm_from_native(
+                ckpt_path, modeling_yue2, torch_dtype=torch.bfloat16)
+            tokenizer = native_ckpt.YuE2JsonTokenizer(
+                native_ckpt.load_native_tokenizer_json(ckpt_path))
 
             fp = _folder_paths()
             output_dir = Path(fp.get_folder_paths("loras")[0])
@@ -222,13 +218,12 @@ class YuE2LoRATrainer:
                 t_sampling=t_sampling, max_grad_norm=max_grad_norm,
                 log_every=log_every, save_every=save_every,
                 trigger_word=trigger_word, output_dir=output_dir,
-                base_model_name=bundle["model_name"],
-                output_format="olm" if write_olm_format else "native",
+                base_model_name=checkpoint,
             )
             log_lines = [
-                f"YuE2 LoRA training: model={bundle['model_name']} clips={len(dataset.items)} "
+                f"YuE2 LoRA training: checkpoint={checkpoint} clips={len(dataset.items)} "
                 f"trigger={trigger_word!r} steps={steps} rank={rank} "
-                f"format={'olm' if write_olm_format else 'native'}",
+                f"format=native (LoraLoaderModelOnly)",
                 f"output -> {output_dir}",
             ]
             try:
@@ -239,96 +234,11 @@ class YuE2LoRATrainer:
         return (lora_path, "\n".join(log_lines))
 
 
-class YuE2LoRAMergeExport:
-    """Merge a trained LoRA into the base model and export a new
-    models/yue2/<name> folder usable by the standard YuE2 Model Loader."""
-
-    @classmethod
-    def INPUT_TYPES(cls):
-        fp = _folder_paths()
-        paths = _model_paths()
-        loras = fp.get_filename_list("loras") or ["no loras found"]
-        models = paths.list("yue2") or ["No models found"]
-        return {"required": {
-            "model": (models, {"tooltip": "Base model the LoRA was trained on."}),
-            "lora": (loras, {"tooltip": "LoRA file from models/loras (as written by the trainer)."}),
-            "strength": ("FLOAT", {"default": 1.0, "min": 0.0, "max": 4.0, "step": 0.05}),
-            "output_name": ("STRING", {"default": "yue2-lora-merged",
-                "tooltip": "Name of the new folder created inside models/yue2."}),
-        }}
-
-    RETURN_TYPES = ("STRING",)
-    RETURN_NAMES = ("merged_model_folder",)
-    FUNCTION = "merge"
-    CATEGORY = CATEGORY
-
-    def merge(self, model, lora, strength, output_name):
-        from .trainer_core import merge as merge_mod
-        fp = _folder_paths()
-        paths = _model_paths()
-        model_dir = paths.resolve("yue2", model)
-        lora_path = Path(fp.get_full_path_or_raise("loras", lora))
-        output_root = Path(model_dir).parent
-        out_dir = merge_mod.merge_to_new_model(model_dir, lora_path, output_root,
-                                               output_name, strength)
-        _free_memory()
-        return (str(out_dir),)
-
-
-class YuE2LoRAConvertNative:
-    """Convert a YuE2-Trainer LoRA to ComfyUI-native format so it loads with
-    the standard LoraLoaderModelOnly on the native YuE2 checkpoint
-    (checkpoints/yue2.safetensors -> CheckpointLoader -> native sampler)."""
-
-    @classmethod
-    def INPUT_TYPES(cls):
-        fp = _folder_paths()
-        loras = fp.get_filename_list("loras") or ["no loras found"]
-        return {"required": {
-            "lora": (loras, {"tooltip": "LoRA written by the YuE2 LoRA Trainer (models/loras)."}),
-            "output_name": ("STRING", {"default": "yue2_mystyle_native",
-                "tooltip": "File name for the converted LoRA (<name>.safetensors), also saved into models/loras."}),
-        }}
-
-    RETURN_TYPES = ("STRING", "STRING")
-    RETURN_NAMES = ("native_lora_path", "report")
-    FUNCTION = "convert"
-    CATEGORY = CATEGORY
-
-    def convert(self, lora, output_name):
-        from .trainer_core import convert as convert_mod
-        fp = _folder_paths()
-        lora_path = Path(fp.get_full_path_or_raise("loras", lora))
-        output_name = output_name.strip()
-        if not output_name or any(c in output_name for c in '\\/:*?"<>|'):
-            raise ValueError("output_name must be a valid file name (no path characters)")
-        out_path = Path(fp.get_folder_paths("loras")[0]) / f"{output_name}.safetensors"
-        report = convert_mod.convert_lora_to_native(lora_path, out_path)
-        lines = [
-            f"converted {lora} -> {out_path.name}",
-            f"tensors written: {report['tensors']}",
-            "",
-            f"{len(report['converted'])} module(s) converted:",
-            *("  " + line for line in report["converted"]),
-        ]
-        if report["skipped"]:
-            lines += ["", f"{len(report['skipped'])} module(s) skipped (no native equivalent):",
-                      *("  " + line for line in report["skipped"])]
-        lines += ["", "Use with: CheckpointLoader (yue2.safetensors) -> LoraLoaderModelOnly -> native YuE2 sampler."]
-        return (str(out_path), "\n".join(lines))
-
-
 NODE_CLASS_MAPPINGS = {
-    "YuE2TrainModelLoader": YuE2TrainModelLoader,
     "YuE2TrainingDataset": YuE2TrainingDataset,
     "YuE2LoRATrainer": YuE2LoRATrainer,
-    "YuE2LoRAMergeExport": YuE2LoRAMergeExport,
-    "YuE2LoRAConvertNative": YuE2LoRAConvertNative,
 }
 NODE_DISPLAY_NAME_MAPPINGS = {
-    "YuE2TrainModelLoader": "YuE2 Train Model Loader",
     "YuE2TrainingDataset": "YuE2 Training Dataset (audio folder)",
     "YuE2LoRATrainer": "YuE2 LoRA Trainer",
-    "YuE2LoRAMergeExport": "YuE2 LoRA Merge (Export)",
-    "YuE2LoRAConvertNative": "YuE2 LoRA Convert (to Native)",
 }

@@ -140,18 +140,13 @@ def sample_t(rng: random.Random, generator: torch.Generator, device, mode: str):
 
 
 @torch.inference_mode(False)  # ComfyUI runs nodes under inference_mode; training needs autograd
-def _save_lora(model, path, metadata: dict, output_format: str):
-    """Write the LoRA in 'native' (ComfyUI LoraLoader) or 'olm' (HF-layout) format."""
-    if output_format == "native":
-        from safetensors.torch import save_file
-        from . import convert as convert_mod
-        state = lora_mod.lora_state_dict(model)
-        native_sd, _ = convert_mod.convert_tensors(state, metadata)
-        save_file(native_sd, str(path), metadata=convert_mod.native_metadata(metadata))
-    elif output_format == "olm":
-        lora_mod.save_lora(model, path, metadata=metadata)
-    else:
-        raise ValueError("output_format must be 'native' or 'olm'")
+def _save_lora(model, path, metadata: dict):
+    """Write the LoRA in native ComfyUI format (LoraLoaderModelOnly)."""
+    from safetensors.torch import save_file
+    from . import convert as convert_mod
+    state = lora_mod.lora_state_dict(model)
+    native_sd, _ = convert_mod.convert_tensors(state, metadata)
+    save_file(native_sd, str(path), metadata=convert_mod.native_metadata(metadata))
     return str(path)
 
 
@@ -264,10 +259,10 @@ def run_training(model, tokenizer, protocol, dataset: data_mod.TrainDataset, cfg
 
         if cfg.save_every > 0 and (step + 1) % cfg.save_every == 0 and step + 1 < cfg.steps:
             ckpt = out_dir / f"{cfg.lora_name}_step{step + 1}.safetensors"
-            _save_lora(model, ckpt, {**metadata, "steps": step + 1}, cfg.output_format)
+            _save_lora(model, ckpt, {**metadata, "steps": step + 1})
             log_lines.append(f"checkpoint saved: {ckpt.name}")
 
     final_path = out_dir / f"{cfg.lora_name}.safetensors"
-    _save_lora(model, final_path, metadata, cfg.output_format)
-    log_lines.append(f"final LoRA saved ({cfg.output_format} format): {final_path}")
+    _save_lora(model, final_path, metadata)
+    log_lines.append(f"final LoRA saved (native format): {final_path}")
     return str(final_path)
