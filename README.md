@@ -1,6 +1,7 @@
 # ComfyUI-YuE2-Trainer
 
 LoRA training nodes for **[m-a-p/YuE2-3B](https://huggingface.co/m-a-p/YuE2-3B)** inside ComfyUI.
+This is first BETA release, so if you want to help to improve it please fork this repo and send pull request. Thank you!
 
 Train YuE2 on your own music (mp3 / wav / flac) with a **trigger word**, so the model
 learns the **style, instrumentation and vocal timbre** of your source files. No caption
