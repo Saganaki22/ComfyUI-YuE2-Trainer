@@ -1,0 +1,294 @@
+{
+  "id": "yue2-trainer-01-training",
+  "revision": 0,
+  "last_node_id": 7,
+  "last_link_id": 7,
+  "nodes": [
+    {
+      "id": 1,
+      "type": "YuE2TrainModelLoader",
+      "pos": [
+        40,
+        60
+      ],
+      "size": [
+        320,
+        100
+      ],
+      "flags": {},
+      "order": 0,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "train_bundle",
+          "type": "YUE2_TRAIN_BUNDLE",
+          "slot_index": 0,
+          "links": [
+            1,
+            4
+          ]
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "YuE2TrainModelLoader"
+      },
+      "widgets_values": [
+        "yue2",
+        "yue2_vae"
+      ],
+      "widgets_values_named": {
+        "model": "yue2",
+        "vae": "yue2_vae"
+      },
+      "color": "#0f2a5f",
+      "bgcolor": "#0b1220"
+    },
+    {
+      "id": 2,
+      "type": "YuE2TrainingDataset",
+      "pos": [
+        40,
+        220
+      ],
+      "size": [
+        360,
+        230
+      ],
+      "flags": {},
+      "order": 1,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "bundle",
+          "type": "YUE2_TRAIN_BUNDLE",
+          "link": 1
+        }
+      ],
+      "outputs": [
+        {
+          "name": "dataset",
+          "type": "YUE2_TRAIN_DATASET",
+          "slot_index": 0,
+          "links": [
+            5
+          ]
+        },
+        {
+          "name": "summary",
+          "type": "STRING",
+          "slot_index": 1,
+          "links": null
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "YuE2TrainingDataset"
+      },
+      "widgets_values": [
+        "C:/path/to/your/songs",
+        10,
+        "txt_file",
+        "",
+        "",
+        false
+      ],
+      "widgets_values_named": {
+        "audio_folder": "C:/path/to/your/songs",
+        "clip_seconds": 10,
+        "caption_mode": "txt_file",
+        "default_caption": "",
+        "cache_folder": "",
+        "force_reencode": false
+      },
+      "color": "#0f2a5f",
+      "bgcolor": "#0b1220"
+    },
+    {
+      "id": 5,
+      "type": "YuE2LoRATrainer",
+      "pos": [
+        460,
+        60
+      ],
+      "size": [
+        380,
+        540
+      ],
+      "flags": {},
+      "order": 2,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "bundle",
+          "type": "YUE2_TRAIN_BUNDLE",
+          "link": 4
+        },
+        {
+          "name": "dataset",
+          "type": "YUE2_TRAIN_DATASET",
+          "link": 5
+        }
+      ],
+      "outputs": [
+        {
+          "name": "lora_path",
+          "type": "STRING",
+          "links": [
+            7
+          ]
+        },
+        {
+          "name": "training_log",
+          "type": "STRING",
+          "links": null
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "YuE2LoRATrainer"
+      },
+      "widgets_values": [
+        "mystyle",
+        1000,
+        0.0001,
+        32,
+        32,
+        0,
+        "nar_attn_mlp",
+        "yue2_mystyle",
+        1234,
+        "randomize",
+        "adamw",
+        "constant",
+        50,
+        1,
+        0.1,
+        "logit_normal",
+        1,
+        10,
+        0,
+        false
+      ],
+      "widgets_values_named": {
+        "trigger_word": "mystyle",
+        "steps": 1000,
+        "learning_rate": 0.0001,
+        "rank": 32,
+        "alpha": 32,
+        "lora_dropout": 0,
+        "target_preset": "nar_attn_mlp",
+        "lora_name": "yue2_mystyle",
+        "seed": 1234,
+        "control_after_generate": "randomize",
+        "optimizer": "adamw",
+        "lr_scheduler": "constant",
+        "warmup_steps": 50,
+        "grad_accum": 1,
+        "caption_dropout": 0.1,
+        "t_sampling": "logit_normal",
+        "max_grad_norm": 1,
+        "log_every": 10,
+        "save_every": 0,
+        "write_olm_format": false
+      },
+      "color": "#0f2a5f",
+      "bgcolor": "#0b1220"
+    },
+    {
+      "id": 7,
+      "type": "ShowText|pysssss",
+      "pos": [
+        860,
+        60
+      ],
+      "size": [
+        360,
+        190
+      ],
+      "flags": {},
+      "order": 3,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "text",
+          "type": "STRING",
+          "link": 7
+        }
+      ],
+      "outputs": [
+        {
+          "name": "STRING",
+          "shape": 6,
+          "type": "STRING",
+          "links": null
+        }
+      ],
+      "properties": {
+        "cnr_id": "comfyui-custom-scripts",
+        "ver": "609f3afaa74b2f88ef9ce8d939626065e3247469",
+        "Node name for S&R": "ShowText|pysssss"
+      },
+      "color": "#0f2a5f",
+      "bgcolor": "#0b1220"
+    }
+  ],
+  "links": [
+    [
+      1,
+      1,
+      0,
+      2,
+      0,
+      "YUE2_TRAIN_BUNDLE"
+    ],
+    [
+      4,
+      1,
+      0,
+      5,
+      0,
+      "YUE2_TRAIN_BUNDLE"
+    ],
+    [
+      5,
+      2,
+      0,
+      5,
+      1,
+      "YUE2_TRAIN_DATASET"
+    ],
+    [
+      7,
+      5,
+      0,
+      7,
+      0,
+      "STRING"
+    ]
+  ],
+  "groups": [
+    {
+      "id": 1,
+      "title": "1) Set your audio folder, trigger word and LoRA name - then Queue",
+      "bounding": [
+        20,
+        0,
+        1220,
+        630
+      ],
+      "color": "#3f789e",
+      "flags": {}
+    }
+  ],
+  "config": {},
+  "extra": {
+    "ds": {
+      "scale": 0.6830134553650705,
+      "offset": [
+        611.6374058318219,
+        465.7668634624363
+      ]
+    },
+    "frontendVersion": "1.52.7"
+  },
+  "version": 0.4
+}

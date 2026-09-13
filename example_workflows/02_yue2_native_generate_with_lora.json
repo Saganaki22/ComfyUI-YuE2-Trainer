@@ -1,0 +1,501 @@
+{
+  "id": "yue2-trainer-02-native-generate",
+  "revision": 0,
+  "last_node_id": 10,
+  "last_link_id": 16,
+  "nodes": [
+    {
+      "id": 9,
+      "type": "VAEDecodeAudio",
+      "pos": [
+        1210,
+        70
+      ],
+      "size": [
+        164.2388671875,
+        46
+      ],
+      "flags": {},
+      "order": 5,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "samples",
+          "type": "LATENT",
+          "link": 10
+        },
+        {
+          "name": "vae",
+          "type": "VAE",
+          "link": 11
+        }
+      ],
+      "outputs": [
+        {
+          "name": "AUDIO",
+          "type": "AUDIO",
+          "links": [
+            12
+          ]
+        }
+      ],
+      "properties": {
+        "cnr_id": "comfy-core",
+        "ver": "0.35.0",
+        "Node name for S&R": "VAEDecodeAudio"
+      },
+      "color": "#0f2a5f",
+      "bgcolor": "#0b1220"
+    },
+    {
+      "id": 2,
+      "type": "LoraLoaderModelOnly",
+      "pos": [
+        40,
+        230
+      ],
+      "size": [
+        330,
+        90
+      ],
+      "flags": {},
+      "order": 1,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "model",
+          "type": "MODEL",
+          "link": 1
+        }
+      ],
+      "outputs": [
+        {
+          "name": "MODEL",
+          "type": "MODEL",
+          "slot_index": 0,
+          "links": [
+            3
+          ]
+        }
+      ],
+      "properties": {
+        "cnr_id": "comfy-core",
+        "ver": "0.35.0",
+        "Node name for S&R": "LoraLoaderModelOnly"
+      },
+      "widgets_values": [
+        "yue2_elvis_presley.safetensors",
+        1
+      ],
+      "widgets_values_named": {
+        "lora_name": "yue2_elvis_presley.safetensors",
+        "strength_model": 1
+      },
+      "color": "#0f2a5f",
+      "bgcolor": "#0b1220"
+    },
+    {
+      "id": 1,
+      "type": "CheckpointLoaderSimple",
+      "pos": [
+        40,
+        60
+      ],
+      "size": [
+        330,
+        110
+      ],
+      "flags": {},
+      "order": 0,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "MODEL",
+          "type": "MODEL",
+          "slot_index": 0,
+          "links": [
+            1
+          ]
+        },
+        {
+          "name": "CLIP",
+          "type": "CLIP",
+          "slot_index": 1,
+          "links": [
+            15
+          ]
+        },
+        {
+          "name": "VAE",
+          "type": "VAE",
+          "slot_index": 2,
+          "links": [
+            11
+          ]
+        }
+      ],
+      "properties": {
+        "cnr_id": "comfy-core",
+        "ver": "0.35.0",
+        "Node name for S&R": "CheckpointLoaderSimple"
+      },
+      "widgets_values": [
+        "yue2.safetensors"
+      ],
+      "widgets_values_named": {
+        "ckpt_name": "yue2.safetensors"
+      },
+      "color": "#0f2a5f",
+      "bgcolor": "#0b1220"
+    },
+    {
+      "id": 5,
+      "type": "KSampler",
+      "pos": [
+        850,
+        70
+      ],
+      "size": [
+        320,
+        270
+      ],
+      "flags": {},
+      "order": 4,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "model",
+          "type": "MODEL",
+          "link": 3
+        },
+        {
+          "name": "positive",
+          "type": "CONDITIONING",
+          "link": 13
+        },
+        {
+          "name": "negative",
+          "type": "CONDITIONING",
+          "link": 14
+        },
+        {
+          "name": "latent_image",
+          "type": "LATENT",
+          "link": 6
+        }
+      ],
+      "outputs": [
+        {
+          "name": "LATENT",
+          "type": "LATENT",
+          "slot_index": 0,
+          "links": [
+            10
+          ]
+        }
+      ],
+      "properties": {
+        "cnr_id": "comfy-core",
+        "ver": "0.35.0",
+        "Node name for S&R": "KSampler"
+      },
+      "widgets_values": [
+        831001,
+        "fixed",
+        32,
+        1,
+        "euler",
+        "simple",
+        1
+      ],
+      "widgets_values_named": {
+        "seed": 831001,
+        "control_after_generate": "fixed",
+        "steps": 32,
+        "cfg": 1,
+        "sampler_name": "euler",
+        "scheduler": "simple",
+        "denoise": 1
+      },
+      "color": "#0f2a5f",
+      "bgcolor": "#0b1220"
+    },
+    {
+      "id": 4,
+      "type": "EmptyYuE2LatentAudio",
+      "pos": [
+        50,
+        380
+      ],
+      "size": [
+        320,
+        90
+      ],
+      "flags": {},
+      "order": 3,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "seconds",
+          "type": "FLOAT",
+          "widget": {
+            "name": "seconds"
+          },
+          "link": 16
+        }
+      ],
+      "outputs": [
+        {
+          "name": "LATENT",
+          "type": "LATENT",
+          "slot_index": 0,
+          "links": [
+            6
+          ]
+        }
+      ],
+      "properties": {
+        "cnr_id": "comfy-core",
+        "ver": "0.35.0",
+        "Node name for S&R": "EmptyYuE2LatentAudio"
+      },
+      "widgets_values": [
+        120,
+        1
+      ],
+      "widgets_values_named": {
+        "seconds": 120,
+        "batch_size": 1
+      },
+      "color": "#0f2a5f",
+      "bgcolor": "#0b1220"
+    },
+    {
+      "id": 8,
+      "type": "SaveAudioAdvanced",
+      "pos": [
+        1210,
+        170
+      ],
+      "size": [
+        340,
+        160
+      ],
+      "flags": {},
+      "order": 6,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "audio",
+          "type": "AUDIO",
+          "link": 12
+        }
+      ],
+      "outputs": [
+        {
+          "name": "audio",
+          "type": "AUDIO",
+          "links": null
+        }
+      ],
+      "properties": {
+        "cnr_id": "comfy-core",
+        "ver": "0.35.0",
+        "Node name for S&R": "SaveAudioAdvanced"
+      },
+      "widgets_values": [
+        "audio/ComfyUI",
+        "mp3",
+        "V0"
+      ],
+      "widgets_values_named": {
+        "filename_prefix": "audio/ComfyUI",
+        "format": "mp3",
+        "format.quality": "V0"
+      },
+      "color": "#0f2a5f",
+      "bgcolor": "#0b1220"
+    },
+    {
+      "id": 10,
+      "type": "YuE2GenerateMusic",
+      "pos": [
+        430,
+        100
+      ],
+      "size": [
+        400,
+        408
+      ],
+      "flags": {},
+      "order": 2,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "clip",
+          "type": "CLIP",
+          "link": 15
+        }
+      ],
+      "outputs": [
+        {
+          "name": "CONDITIONING",
+          "type": "CONDITIONING",
+          "links": [
+            13,
+            14
+          ]
+        },
+        {
+          "name": "seconds",
+          "type": "FLOAT",
+          "links": [
+            16
+          ]
+        }
+      ],
+      "properties": {
+        "cnr_id": "comfy-core",
+        "ver": "0.35.0",
+        "Node name for S&R": "YuE2GenerateMusic"
+      },
+      "widgets_values": [
+        "Elvis presley",
+        "[Chorus]\nJolene, Jolene, Jolene, Jolene\nI'm beggin' of you, please don't take my man\nJolene, Jolene, Jolene, Jolene\nPlease don't take him just because you can\n\n[Verse 1]\nYour beauty is beyond compare\nWith flaming locks of auburn hair\nWith ivory skin and eyes of emerald green\nYour smile is like a breath of spring\nYour voice is soft like summer rain\nAnd I cannot compete with you, Jolene\n\n[Verse 2]\nHe talks about you in his sleep\nAnd there's nothin' I can do to keep\nFrom cryin' when he calls your name, Jolene\nAnd I can easily understand\nHow you could easily take my man\nBut you don't know what he means to me, Jolene\n\n[Chorus]\nJolene, Jolene, Jolene, Jolene\nI'm beggin' of you, please don't take my man\nJolene, Jolene, Jolene, Jolene\nPlease don't take him just because you can",
+        "",
+        474118852172016,
+        "randomize",
+        "full",
+        360,
+        1,
+        0.95,
+        100,
+        1.2
+      ],
+      "widgets_values_named": {
+        "style": "Elvis presley",
+        "lyrics": "[Chorus]\nJolene, Jolene, Jolene, Jolene\nI'm beggin' of you, please don't take my man\nJolene, Jolene, Jolene, Jolene\nPlease don't take him just because you can\n\n[Verse 1]\nYour beauty is beyond compare\nWith flaming locks of auburn hair\nWith ivory skin and eyes of emerald green\nYour smile is like a breath of spring\nYour voice is soft like summer rain\nAnd I cannot compete with you, Jolene\n\n[Verse 2]\nHe talks about you in his sleep\nAnd there's nothin' I can do to keep\nFrom cryin' when he calls your name, Jolene\nAnd I can easily understand\nHow you could easily take my man\nBut you don't know what he means to me, Jolene\n\n[Chorus]\nJolene, Jolene, Jolene, Jolene\nI'm beggin' of you, please don't take my man\nJolene, Jolene, Jolene, Jolene\nPlease don't take him just because you can",
+        "abc": "",
+        "seed": 474118852172016,
+        "control_after_generate": "randomize",
+        "mode": "full",
+        "max_duration": 360,
+        "temperature": 1,
+        "top_p": 0.95,
+        "top_k": 100,
+        "repetition_penalty": 1.2
+      },
+      "color": "#0f2a5f",
+      "bgcolor": "#0b1220"
+    }
+  ],
+  "links": [
+    [
+      1,
+      1,
+      0,
+      2,
+      0,
+      "MODEL"
+    ],
+    [
+      3,
+      2,
+      0,
+      5,
+      0,
+      "MODEL"
+    ],
+    [
+      6,
+      4,
+      0,
+      5,
+      3,
+      "LATENT"
+    ],
+    [
+      10,
+      5,
+      0,
+      9,
+      0,
+      "LATENT"
+    ],
+    [
+      11,
+      1,
+      2,
+      9,
+      1,
+      "VAE"
+    ],
+    [
+      12,
+      9,
+      0,
+      8,
+      0,
+      "AUDIO"
+    ],
+    [
+      13,
+      10,
+      0,
+      5,
+      1,
+      "CONDITIONING"
+    ],
+    [
+      14,
+      10,
+      0,
+      5,
+      2,
+      "CONDITIONING"
+    ],
+    [
+      15,
+      1,
+      1,
+      10,
+      0,
+      "CLIP"
+    ],
+    [
+      16,
+      10,
+      1,
+      4,
+      0,
+      "FLOAT"
+    ]
+  ],
+  "groups": [
+    {
+      "id": 1,
+      "title": "Generate with your LoRA (native YuE2 + LoraLoader) - put your trigger word in the style prompt",
+      "bounding": [
+        20,
+        0,
+        1550,
+        560
+      ],
+      "color": "#3f789e",
+      "flags": {}
+    }
+  ],
+  "config": {},
+  "extra": {
+    "ds": {
+      "scale": 2.357947691000002,
+      "offset": [
+        -192.32171510510983,
+        -15.61524693229569
+      ]
+    },
+    "frontendVersion": "1.52.7"
+  },
+  "version": 0.4
+}
