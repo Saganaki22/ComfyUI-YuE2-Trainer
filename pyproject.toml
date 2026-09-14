@@ -1,0 +1,14 @@
+[project]
+name = "ComfyUI-YuE2-Trainer"
+description = "NODES: ComfyUI-YuE2-Trainer - Experimental trainer nodes for YuE2"
+version = 0.9.1"
+license = {file = "LICENSE"}
+
+[project.urls]
+Repository = "https://github.com/Starnodes2024/ComfyUI-YuE2-Trainer"
+#  Used by Comfy Registry https://comfyregistry.org
+
+[tool.comfy]
+PublisherId = "starnodes"
+DisplayName = "ComfyUI-YuE2-Trainer"
+Icon = ""

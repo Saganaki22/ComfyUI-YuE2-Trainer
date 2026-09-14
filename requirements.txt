@@ -1,0 +1,7 @@
+# Audio loading fallback for the dataset node.
+# (The primary loader, torchaudio, already ships with ComfyUI; soundfile is
+# used whenever torchaudio cannot decode a file, e.g. some mp3/flac builds.)
+soundfile>=0.12
+
+# Optional chart rendering for the YuE2 Training Curve node.
+matplotlib>=3.7

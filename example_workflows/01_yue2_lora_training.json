@@ -1,18 +1,110 @@
 {
-  "id": "yue2-trainer-01-training",
+  "id": "65ac32b4-4909-4ea3-b6c1-dec2a2767db1",
   "revision": 0,
-  "last_node_id": 11,
-  "last_link_id": 12,
+  "last_node_id": 12,
+  "last_link_id": 14,
   "nodes": [
     {
       "id": 10,
-      "type": "YuE2TrainingDataset",
+      "type": "YuE2LoRATrainer",
       "pos": [
-        30,
-        90
+        -2980,
+        -760
       ],
       "size": [
-        400,
+        270,
+        590
+      ],
+      "flags": {},
+      "order": 1,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "dataset",
+          "type": "YUE2_TRAIN_DATASET",
+          "link": 12
+        }
+      ],
+      "outputs": [
+        {
+          "name": "lora_path",
+          "type": "STRING",
+          "links": [
+            13
+          ]
+        },
+        {
+          "name": "training_log",
+          "type": "STRING",
+          "links": [
+            14
+          ]
+        }
+      ],
+      "title": "⚡YuE2 LoRA Trainer⚡",
+      "properties": {
+        "Node name for S&R": "YuE2LoRATrainer"
+      },
+      "widgets_values": [
+        "yue2.safetensors",
+        "cure",
+        3000,
+        0.0001,
+        16,
+        16,
+        0,
+        "nar_attn_mlp",
+        "TheCure2_YuE_LoRa",
+        315376947832829,
+        "randomize",
+        "adamw",
+        "cosine",
+        50,
+        1,
+        0.1,
+        "uniform",
+        1,
+        10,
+        0,
+        0.999,
+        true
+      ],
+      "widgets_values_named": {
+        "checkpoint": "yue2.safetensors",
+        "trigger_word": "cure",
+        "steps": 3000,
+        "learning_rate": 0.0001,
+        "rank": 16,
+        "alpha": 16,
+        "lora_dropout": 0,
+        "target_preset": "nar_attn_mlp",
+        "lora_name": "TheCure2_YuE_LoRa",
+        "seed": 315376947832829,
+        "control_after_generate": "randomize",
+        "optimizer": "adamw",
+        "lr_scheduler": "cosine",
+        "warmup_steps": 50,
+        "grad_accum": 1,
+        "caption_dropout": 0.1,
+        "t_sampling": "uniform",
+        "max_grad_norm": 1,
+        "log_every": 10,
+        "save_every": 0,
+        "ema_decay": 0.999,
+        "live_curve": true
+      },
+      "color": "#009933",
+      "bgcolor": "#0b1220"
+    },
+    {
+      "id": 9,
+      "type": "YuE2TrainingDataset",
+      "pos": [
+        -3460,
+        -770
+      ],
+      "size": [
+        460,
         260
       ],
       "flags": {},
@@ -24,7 +116,7 @@
           "name": "dataset",
           "type": "YUE2_TRAIN_DATASET",
           "links": [
-            11
+            12
           ]
         },
         {
@@ -33,126 +125,84 @@
           "links": null
         }
       ],
-      "title": "⚡YuE2 Training Dataset (audio folder)⚡",
       "properties": {
         "Node name for S&R": "YuE2TrainingDataset"
       },
       "widgets_values": [
         "yue2.safetensors",
-        "F:\\NP3\\depeche mode",
-        20,
-        "txt_file",
-        "depeche",
+        "F:\\NP3\\thecure",
+        22.6,
+        "default",
+        "cure",
         "",
-        false
+        true
       ],
       "widgets_values_named": {
         "checkpoint": "yue2.safetensors",
-        "audio_folder": "F:\\NP3\\depeche mode",
-        "clip_seconds": 20,
-        "caption_mode": "txt_file",
-        "default_caption": "depeche",
+        "audio_folder": "F:\\NP3\\thecure",
+        "clip_seconds": 22.6,
+        "caption_mode": "default",
+        "default_caption": "cure",
         "cache_folder": "",
-        "force_reencode": false
-      },
-      "color": "#009933",
-      "bgcolor": "#0b1220"
-    },
-    {
-      "id": 11,
-      "type": "YuE2LoRATrainer",
-      "pos": [
-        450,
-        90
-      ],
-      "size": [
-        380,
-        540
-      ],
-      "flags": {},
-      "order": 1,
-      "mode": 0,
-      "inputs": [
-        {
-          "name": "dataset",
-          "type": "YUE2_TRAIN_DATASET",
-          "link": 11
-        }
-      ],
-      "outputs": [
-        {
-          "name": "lora_path",
-          "type": "STRING",
-          "links": [
-            12
-          ]
-        },
-        {
-          "name": "training_log",
-          "type": "STRING",
-          "links": null
-        }
-      ],
-      "properties": {
-        "Node name for S&R": "YuE2LoRATrainer"
-      },
-      "widgets_values": [
-        "yue2.safetensors",
-        "depeche",
-        2000,
-        0.0001,
-        32,
-        32,
-        0,
-        "nar_attn_mlp",
-        "yue2_depechemode",
-        239147215974568,
-        "randomize",
-        "adamw",
-        "constant",
-        50,
-        1,
-        0.1,
-        "logit_normal",
-        1,
-        10,
-        0
-      ],
-      "widgets_values_named": {
-        "checkpoint": "yue2.safetensors",
-        "trigger_word": "depeche",
-        "steps": 2000,
-        "learning_rate": 0.0001,
-        "rank": 32,
-        "alpha": 32,
-        "lora_dropout": 0,
-        "target_preset": "nar_attn_mlp",
-        "lora_name": "yue2_depechemode",
-        "seed": 239147215974568,
-        "control_after_generate": "randomize",
-        "optimizer": "adamw",
-        "lr_scheduler": "constant",
-        "warmup_steps": 50,
-        "grad_accum": 1,
-        "caption_dropout": 0.1,
-        "t_sampling": "logit_normal",
-        "max_grad_norm": 1,
-        "log_every": 10,
-        "save_every": 0
+        "force_reencode": true
       },
       "color": "#0f2a5f",
       "bgcolor": "#0b1220"
     },
     {
-      "id": 7,
-      "type": "ShowText|pysssss",
+      "id": 12,
+      "type": "YuE2TrainingCurve",
       "pos": [
-        850,
-        90
+        -2690,
+        -760
       ],
       "size": [
-        360,
-        190
+        510,
+        490
+      ],
+      "flags": {},
+      "order": 3,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "training_log",
+          "type": "STRING",
+          "link": 14
+        }
+      ],
+      "outputs": [
+        {
+          "name": "chart",
+          "type": "IMAGE",
+          "links": null
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "YuE2TrainingCurve"
+      },
+      "widgets_values": [
+        25,
+        true,
+        true
+      ],
+      "widgets_values_named": {
+        "smooth": 25,
+        "show_raw": true,
+        "show_lr": true
+      },
+      "color": "#0f2a5f",
+      "bgcolor": "#0b1220"
+    },
+    {
+      "id": 4,
+      "type": "ShowText|pysssss",
+      "pos": [
+        -3460,
+        -470
+      ],
+      "size": [
+        460,
+        280
       ],
       "flags": {},
       "order": 2,
@@ -161,7 +211,7 @@
         {
           "name": "text",
           "type": "STRING",
-          "link": 12
+          "link": 13
         }
       ],
       "outputs": [
@@ -177,52 +227,56 @@
         "ver": "609f3afaa74b2f88ef9ce8d939626065e3247469",
         "Node name for S&R": "ShowText|pysssss"
       },
+      "widgets_values": [
+        "E:\\AI\\ComfyUI-Easy-Install\\ComfyUI-Easy-Install\\ComfyUI\\models\\loras\\TheCure_small_YuE_LoRa.safetensors"
+      ],
+      "widgets_values_named": {
+        "text_0": "E:\\AI\\ComfyUI-Easy-Install\\ComfyUI-Easy-Install\\ComfyUI\\models\\loras\\TheCure_small_YuE_LoRa.safetensors"
+      },
       "color": "#0f2a5f",
       "bgcolor": "#0b1220"
     }
   ],
   "links": [
     [
-      11,
-      10,
+      12,
+      9,
       0,
-      11,
+      10,
       0,
       "YUE2_TRAIN_DATASET"
     ],
     [
-      12,
-      11,
+      13,
+      10,
       0,
-      7,
+      4,
+      0,
+      "STRING"
+    ],
+    [
+      14,
+      10,
+      1,
+      12,
       0,
       "STRING"
     ]
   ],
-  "groups": [
-    {
-      "id": 1,
-      "title": "1) Set your audio folder, trigger word and LoRA name - then Queue",
-      "bounding": [
-        20,
-        0,
-        1220,
-        630
-      ],
-      "color": "#3f789e",
-      "flags": {}
-    }
-  ],
+  "groups": [],
   "config": {},
   "extra": {
     "ds": {
-      "scale": 1.2100000000000006,
+      "scale": 1.100000000000001,
       "offset": [
-        60.26122478315153,
-        151.71130793412397
+        3681.12251639764,
+        969.3720914880918
       ]
     },
     "frontendVersion": "1.52.7"
   },
-  "version": 0.4
+  "version": 0.4,
+  "seed_widgets": {
+    "10": 9
+  }
 }

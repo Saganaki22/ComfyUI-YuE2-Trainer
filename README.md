@@ -1,7 +1,6 @@
 # ComfyUI-YuE2-Trainer
 
 LoRA training nodes for **[m-a-p/YuE2-3B](https://huggingface.co/m-a-p/YuE2-3B)** inside ComfyUI.
-This is first BETA release, so if you want to help to improve it please fork this repo and send pull request. Thank you!
 
 Train YuE2 on your own music (mp3 / wav / flac) with a **trigger word**, so the model
 learns the **style, instrumentation and vocal timbre** of your source files. No caption
@@ -32,7 +31,11 @@ License note: YuE2 weights are CC BY-NC 4.0 — non-commercial use only.
 - **Fully standalone** — no other custom nodes required. The official YuE2
   model code (m-a-p's `yue2_infer`, Apache-2.0, unmodified) is bundled in
   `trainer_core/yue2_ref/`.
-- No extra pip packages. Optional: `bitsandbytes` for the 8-bit optimizer.
+- Two small pip packages: `soundfile` (audio loading fallback; already present
+  in most ComfyUI bundles) and `matplotlib` (only used by the optional Training
+  Curve node). Install with the button in ComfyUI-Manager or:
+  `python_embeded\python.exe -m pip install -r requirements.txt`
+- Optional: `bitsandbytes` for the 8-bit optimizer.
 
 ### Model download and placement
 
@@ -79,7 +82,7 @@ git pull
 
 Make sure the [requirements](#requirements) above are met (the YuE2 checkpoint
 is in place), then **restart ComfyUI**.
-Two nodes appear under **YuE2/Training**.
+Three nodes appear under **YuE2/Training**.
 
 ## Usage
 
@@ -88,16 +91,34 @@ Two nodes appear under **YuE2/Training**.
    - Optional: place `songname.txt` next to `songname.mp3` with a caption
      (style / instruments / voice description) and set `caption_mode = txt_file`.
    - `clip_seconds` 10 is a good default (250 latent frames). The node encodes
-     with the checkpoint's built-in VAE and caches latents; rerunning is
-     instant unless you change files or clip length.
+     with the checkpoint's built-in VAE in memory-safe 30 s chunks (flat RAM/VRAM
+     no matter how many or how long the files are, with a progress bar and a
+     responsive Cancel button) and caches latents; rerunning is instant unless
+     you change files or clip length.
 2. **YuE2 LoRA Trainer** — connect the dataset, pick the same `checkpoint`,
    set `trigger_word`, `steps` (default 3000), `learning_rate` (1e-4),
    `rank`/`alpha` (32/32), and `lora_name`. Queue and wait.
    - The LoRA is written in **native ComfyUI format** — load it with
      `LoraLoaderModelOnly` on the native YuE2 checkpoint, no conversion needed.
+   - **EMA smoothing is on by default** (`ema_decay` 0.999): the main
+     `<name>.safetensors` uses the smoothed weights (much more consistent
+     results), and the unsmoothed run is saved next to it as
+     `<name>_raw.safetensors` so you can A/B-compare. Every widget has a
+     tooltip — hover for guidance.
    - Progress bar in ComfyUI; losses appear in the console and in the node's
      `training_log` output.
    - Rough speed estimate on a 4090: ~1–3 s/step at 10 s clips → 1000 steps ≈ 25–50 min.
+3. **YuE2 Training Curve (optional)** — connect the trainer's `training_log`
+   output and watch it **live**: while training runs, the node redraws a
+   compact loss/LR chart every few seconds right inside the node (the trainer
+   streams it via the temp folder; toggle with the trainer's `live_curve`
+   widget, default on). When the run finishes, the final high-quality chart
+   replaces it — dark-styled, with the raw + smoothed **loss curve** and the
+   **learning-rate schedule**, shown inline and as an IMAGE output you can save
+   with any image node (needs `matplotlib` from requirements.txt). If the
+   inline preview doesn't appear after installing, restart ComfyUI and
+   hard-refresh the browser (Ctrl+F5) — the small frontend extension in
+   `web/js/` needs one reload.
 
 ### Generating with your LoRA
 
@@ -111,8 +132,12 @@ training regime is larger.
 
 - **Dataset:** 5–30 songs with a consistent style/voice works well. Consistent,
   well-tagged material beats sheer volume.
-- **Steps/LR:** start with 500–1500 steps @ 1e-4, rank 16. If the result overfits
-  (muffled, repetitive), lower steps or LR; if the trigger has no effect, raise them.
+- **Consistency:** keep `ema_decay` at 0.999 and `lr_scheduler = cosine`
+  (both defaults) — this combination removes most "hit and miss" variance
+  between runs. Compare against the `_raw` file if you are curious.
+- **Steps/LR:** 3000 steps @ 1e-4, rank 32 is the tuned default. If the result
+  overfits (muffled, repetitive), lower steps or LR; if the trigger has no
+  effect, raise them.
 - **VRAM:** lower `clip_seconds` (e.g. 6–8) if you OOM; try `optimizer = adamw_8bit`.
 - **Voice:** vocal timbre transfers through the NAR branch; the exact melody/lyrics
   stay controlled by the frozen AR stage and your prompt.

@@ -3,7 +3,8 @@
 Each training item is one audio clip of ``clip_seconds`` seconds. Clips are
 cut sequentially from every source file; leftover tails shorter than the
 clip length are dropped. Latents are encoded once with the YuE2 VAE
-(FP32, 48 kHz stereo -> [frames, 64] at 25 fps) and cached to disk as
+(FP32, 48 kHz stereo -> [frames, 64] at 25 fps) in overlapping 30 s chunks
+(so peak memory is flat regardless of file length) and cached to disk as
 float16 .npy files, so training never re-encodes and needs no VAE in VRAM.
 """
 from __future__ import annotations
@@ -106,16 +107,46 @@ def _cache_key(path: Path, clip_seconds: float) -> str:
     return hashlib.sha256(raw.encode("utf-8")).hexdigest()[:24]
 
 
-def encode_file_latents(vae, audio: torch.Tensor, device: torch.device) -> np.ndarray:
-    """Encode a full file to latents [frames, 64] float32 (FP32 VAE, no grad)."""
-    with torch.inference_mode():
-        encoded = vae.encode(audio.unsqueeze(0).to(device))
-        if isinstance(encoded, (tuple, list)):
-            encoded = encoded[0]
-        z = encoded[0].float().cpu()  # [64, frames]
-    if z.shape[0] != 64:
-        raise RuntimeError(f"Unexpected VAE latent shape {tuple(z.shape)}")
-    return z.T.contiguous().numpy()  # [frames, 64]
+def encode_file_latents(vae, audio: torch.Tensor, device: torch.device,
+                        chunk_seconds: float = 30.0,
+                        overlap_seconds: float = 2.0) -> np.ndarray:
+    """Encode a full file to latents [frames, 64] float32 (FP32 VAE, no grad).
+
+    The audio is encoded in overlapping chunks (default 30 s + 2 s overlap per
+    side) and the overlap latents are trimmed away, so peak VRAM/RAM stays
+    flat no matter how long the source file is. Chunk and overlap sizes are
+    exact multiples of the VAE's 1920x downsampling, so the split lands on
+    whole latent frames.
+    """
+    total = audio.shape[1]
+    out_chunk = int(chunk_seconds * SAMPLE_RATE)
+    ov = int(overlap_seconds * SAMPLE_RATE)
+    if total <= out_chunk:
+        chunks = [(0, total, 0, total)]
+    else:
+        chunks = []
+        pos = 0
+        while pos < total:
+            end = min(pos + out_chunk, total)
+            chunks.append((max(0, pos - ov), min(total, end + ov), pos, end))
+            pos = end
+    pieces = []
+    for lo, hi, out_lo, out_hi in chunks:
+        seg = audio[:, lo:hi].to(device)
+        with torch.inference_mode():
+            encoded = vae.encode(seg.unsqueeze(0))
+            if isinstance(encoded, (tuple, list)):
+                encoded = encoded[0]
+            z = encoded[0].float().cpu()  # [64, frames]
+        del seg, encoded
+        if z.shape[0] != 64:
+            raise RuntimeError(f"Unexpected VAE latent shape {tuple(z.shape)}")
+        trim_l = (out_lo - lo) // 1920
+        trim_r = (hi - out_hi) // 1920
+        end_frame = z.shape[1] - trim_r if trim_r else z.shape[1]
+        pieces.append(z[:, trim_l:end_frame])
+        del z
+    return torch.cat(pieces, dim=1).T.contiguous().numpy()  # [frames, 64]
 
 
 def build_dataset(vae, folder: Path, cache_dir: Path, clip_seconds: float,
@@ -139,17 +170,21 @@ def build_dataset(vae, folder: Path, cache_dir: Path, clip_seconds: float,
             caption = ""
         key = _cache_key(audio_path, clip_seconds)
         latent_file = cache_dir / f"{audio_path.stem}_{key}.npy"
-        if latent_file.is_file():
-            latents = np.load(latent_file)
-        else:
+        if not latent_file.is_file():
             log.info("Encoding %s to VAE latents ...", audio_path.name)
             audio = load_audio(audio_path)
             latents = encode_file_latents(vae, audio, device)
+            total_frames = latents.shape[0]
             np.save(latent_file, latents.astype(np.float16))
-        clip_count = latents.shape[0] // frames_per_clip
+            del audio, latents
+            if device.type == "cuda":
+                torch.cuda.empty_cache()  # release the caching allocator between files
+        else:
+            total_frames = np.load(latent_file).shape[0]
+        clip_count = total_frames // frames_per_clip
         if clip_count < 1:
             log.warning("Skipping %s: %.1fs of audio is shorter than one %.1fs clip",
-                        audio_path.name, latents.shape[0] / FRAMES_PER_SECOND, clip_seconds)
+                        audio_path.name, total_frames / FRAMES_PER_SECOND, clip_seconds)
             continue
         for clip_index in range(clip_count):
             items.append(DatasetItem(audio_path, caption, latent_file,

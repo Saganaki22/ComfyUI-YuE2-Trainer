@@ -16,6 +16,6 @@ except Exception as exc:  # keep ComfyUI booting; report the real error
     NODE_CLASS_MAPPINGS = {}
     NODE_DISPLAY_NAME_MAPPINGS = {}
 
-WEB_DIRECTORY = None
+WEB_DIRECTORY = "./web"  # frontend extension for the Training Curve preview
 
 __all__ = ["NODE_CLASS_MAPPINGS", "NODE_DISPLAY_NAME_MAPPINGS"]

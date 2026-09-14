@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import logging
 import math
+import os
 import random
 import time
 from pathlib import Path
@@ -140,13 +141,30 @@ def sample_t(rng: random.Random, generator: torch.Generator, device, mode: str):
 
 
 @torch.inference_mode(False)  # ComfyUI runs nodes under inference_mode; training needs autograd
-def _save_lora(model, path, metadata: dict):
-    """Write the LoRA in native ComfyUI format (LoraLoaderModelOnly)."""
+def _save_lora(model, path, metadata: dict, params=None, ema=None):
+    """Write the LoRA in native ComfyUI format (LoraLoaderModelOnly).
+
+    When ``ema`` (fp32 shadow copies aligned with ``params``) is given, the
+    EMA weights are swapped in for saving and the live weights are restored
+    afterwards.
+    """
     from safetensors.torch import save_file
     from . import convert as convert_mod
-    state = lora_mod.lora_state_dict(model)
-    native_sd, _ = convert_mod.convert_tensors(state, metadata)
-    save_file(native_sd, str(path), metadata=convert_mod.native_metadata(metadata))
+    backup = None
+    if ema is not None and params is not None:
+        backup = [p.detach().clone() for p in params]
+        with torch.no_grad():
+            for p, shadow in zip(params, ema):
+                p.data.copy_(shadow.to(p.dtype))
+    try:
+        state = lora_mod.lora_state_dict(model)
+        native_sd, _ = convert_mod.convert_tensors(state, metadata)
+        save_file(native_sd, str(path), metadata=convert_mod.native_metadata(metadata))
+    finally:
+        if backup is not None:
+            with torch.no_grad():
+                for p, live in zip(params, backup):
+                    p.data.copy_(live)
     return str(path)
 
 
@@ -165,6 +183,17 @@ def run_training(model, tokenizer, protocol, dataset: data_mod.TrainDataset, cfg
 
     model.to(device)
     model.train()
+
+    # EMA (exponential moving average) of the LoRA weights — smooths the noisy
+    # per-step updates and gives noticeably more consistent LoRAs.
+    # Created AFTER model.to(device) so the shadows live on the same device
+    # as the trainable params.
+    ema_decay = float(getattr(cfg, "ema_decay", 0.0))
+    ema = None
+    if ema_decay > 0:
+        ema = [p.detach().clone().float() for p in params]
+        log_lines.append(f"EMA enabled: decay={ema_decay} "
+                         f"(<lora_name>.safetensors = EMA, <lora_name>_raw.safetensors = non-EMA)")
 
     try:
         if cfg.optimizer == "adamw_8bit":
@@ -205,6 +234,23 @@ def run_training(model, tokenizer, protocol, dataset: data_mod.TrainDataset, cfg
     running = 0.0
     start_time = time.time()
 
+    # Live chart preview: every few seconds a light-weight chart is written
+    # (atomically) to a fixed temp file; the Training Curve node's frontend
+    # extension polls it while the prompt runs.
+    live_path = getattr(cfg, "live_curve_path", None) or None
+    live_p = Path(live_path) if live_path else None
+    live_on = bool(getattr(cfg, "live_curve", False)) and live_p is not None
+    live_steps: list[int] = []
+    live_losses: list[float] = []
+    live_lrs: list[float] = []
+    live_last = 0.0
+    live_failed = False
+    if live_on:
+        try:  # don't flash the previous run's chart in the live preview
+            Path(live_path).unlink(missing_ok=True)
+        except OSError:
+            pass
+
     metadata = {
         "format": lora_mod.FORMAT_VERSION,
         "base_model": cfg.base_model_name,
@@ -216,6 +262,7 @@ def run_training(model, tokenizer, protocol, dataset: data_mod.TrainDataset, cfg
         "learning_rate": cfg.learning_rate,
         "clip_seconds": dataset.clip_seconds,
         "t_sampling": cfg.t_sampling,
+        "ema_decay": ema_decay,
         "cot": "off",
     }
 
@@ -243,6 +290,11 @@ def run_training(model, tokenizer, protocol, dataset: data_mod.TrainDataset, cfg
             torch.nn.utils.clip_grad_norm_(params, cfg.max_grad_norm)
             optimizer.step()
             optimizer.zero_grad(set_to_none=True)
+            if ema is not None:
+                with torch.no_grad():
+                    for p, shadow in zip(params, ema):
+                        shadow.mul_(ema_decay).add_(p.detach().float(),
+                                                    alpha=1.0 - ema_decay)
 
         history.append(loss.item() * cfg.grad_accum)
         running = history[-1]
@@ -257,12 +309,34 @@ def run_training(model, tokenizer, protocol, dataset: data_mod.TrainDataset, cfg
             log.info(msg)
             log_lines.append(msg)
 
+            live_steps.append(step + 1)
+            live_losses.append(sum(window) / len(window))
+            live_lrs.append(lr_at(step))
+            if live_on and not live_failed and time.time() - live_last >= 4.0:
+                live_last = time.time()
+                try:
+                    from . import curve as curve_mod
+                    tmp_path = live_p.with_name(live_p.stem + ".tmp.png")
+                    curve_mod.render_chart(
+                        live_steps, live_losses, live_lrs,
+                        {"lora_name": cfg.lora_name, "trigger": cfg.trigger_word,
+                         "total": cfg.steps, "live": True},
+                        tmp_path, smooth=15, figsize=(8, 4.2), dpi=90)
+                    os.replace(tmp_path, live_path)
+                except Exception as exc:
+                    live_failed = True
+                    log_lines.append(f"live curve preview disabled ({exc})")
+
         if cfg.save_every > 0 and (step + 1) % cfg.save_every == 0 and step + 1 < cfg.steps:
             ckpt = out_dir / f"{cfg.lora_name}_step{step + 1}.safetensors"
-            _save_lora(model, ckpt, {**metadata, "steps": step + 1})
+            _save_lora(model, ckpt, {**metadata, "steps": step + 1}, params, ema)
             log_lines.append(f"checkpoint saved: {ckpt.name}")
 
     final_path = out_dir / f"{cfg.lora_name}.safetensors"
-    _save_lora(model, final_path, metadata)
+    _save_lora(model, final_path, metadata, params, ema)
     log_lines.append(f"final LoRA saved (native format): {final_path}")
+    if ema is not None:
+        raw_path = out_dir / f"{cfg.lora_name}_raw.safetensors"
+        _save_lora(model, raw_path, {**metadata, "ema_decay": 0.0})
+        log_lines.append(f"non-EMA comparison copy saved: {raw_path}")
     return str(final_path)
