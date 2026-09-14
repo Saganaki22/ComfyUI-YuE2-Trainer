@@ -5,6 +5,7 @@ LoRA training nodes for **[m-a-p/YuE2-3B](https://huggingface.co/m-a-p/YuE2-3B)*
 Train YuE2 on your own music (mp3 / wav / flac) with a **trigger word**, so the model
 learns the **style, instrumentation and vocal timbre** of your source files. No caption
 files required (optional same-named `.txt` captions are supported).
+<img width="909" height="483" alt="image" src="https://github.com/user-attachments/assets/19a1d98d-3469-4be6-828d-1c11722a283b" />
 
 ## How it works (short version)
 
