@@ -1,6 +1,10 @@
 # ComfyUI-YuE2-Trainer
 
 LoRA training nodes for **[m-a-p/YuE2-3B](https://huggingface.co/m-a-p/YuE2-3B)** inside ComfyUI.
+THESE NODES ARE STILL EXPERIMENTAL! Please help improve them by sending Pull Requests.
+- The Loras works better with the FP16 model (not convrot)
+- Dont use ABC code, it may affect the LoRa
+- 5000 Steps with Weight 2.0 works best. Voice cloning still dont work.
 
 Train YuE2 on your own music (mp3 / wav / flac) with a **trigger word**, so the model
 learns the **style, instrumentation and vocal timbre** of your source files. No caption
@@ -123,7 +127,7 @@ Three nodes appear under **YuE2/Training**.
 
 ### Generating with your LoRA
 
-Use **`cot = off`** in the YuE2 Request node and put your trigger word at the start of
+Use **`cot = off`** (leave ABC empty) in the YuE2 Request node and put your trigger word at the start of
 the style prompt, e.g. `mystyle, melancholic piano ballad, soft female vocals`.
 `cot=off` matches the text-only conditioning regime the LoRA was trained with.
 Full/melody CoT also works (the LoRA still shapes the sound) but drift from the
