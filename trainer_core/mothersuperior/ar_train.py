@@ -330,7 +330,7 @@ def train(model,tokenizer,artist,regularizer,output_dir,cfg,check_interrupt=lamb
                 best = metric
                 save('best',step)
             save('last',step)
-        if step >= cfg.save_from and (step-cfg.save_from)%cfg.save_every == 0:
+        if cfg.save_from and step >= cfg.save_from and (step-cfg.save_from)%cfg.save_every == 0:
             save(f'step-{step}',step)
         progress(step,cfg.steps)
     return str(output/'last.safetensors'),records

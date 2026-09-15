@@ -31,6 +31,8 @@ def test_train_config_live_curve_defaults():
     cfg = TrainConfig()
     assert cfg.live_curve is True
     assert cfg.live_curve_path == ''
+    assert cfg.save_from == 600
+    assert cfg.save_every == 200
 
 
 @pytest.mark.parametrize('length',[1,128,511,512,513,700,768,1024,1025,1500])

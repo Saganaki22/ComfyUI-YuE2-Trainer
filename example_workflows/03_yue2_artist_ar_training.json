@@ -160,6 +160,8 @@
         2,
         12288,
         100,
+        600,
+        200,
         true
       ],
       "widgets_values_named": {
@@ -173,6 +175,8 @@
         "grad_accum": 2,
         "max_length": 12288,
         "evaluate_every": 100,
+        "save_from": 600,
+        "save_every": 200,
         "live_curve": true
       }
     },
