@@ -65,5 +65,5 @@ def test_monitor_node_schema(monkeypatch):
     assert YuE2TrainingMonitor.RETURN_TYPES == ()
     assert YuE2TrainingMonitor.OUTPUT_NODE is True
     assert YuE2TrainingMonitor.FUNCTION == 'monitor'
-    assert YuE2TrainingMonitor().monitor() is None
-    assert YuE2TrainingMonitor().monitor(run='tupac_ar_v1') is None
+    assert YuE2TrainingMonitor().monitor() == ()
+    assert YuE2TrainingMonitor().monitor(run='tupac_ar_v1') == ()

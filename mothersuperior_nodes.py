@@ -295,7 +295,7 @@ class YuE2TrainingMonitor:
     OUTPUT_NODE = True
 
     def monitor(self,run=''):
-        return None
+        return ()
 
 
 NODE_CLASS_MAPPINGS = {cls.__name__:cls for cls in (YuE2MothersuperiorAssets,YuE2RealAudioSemanticDataset,YuE2ArtistARLoRATrainer,YuE2TrainingMonitor)}
