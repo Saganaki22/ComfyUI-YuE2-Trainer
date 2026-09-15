@@ -26,6 +26,26 @@ def progress_callback():
     return lambda n,total:bar.update_absolute(n,total)
 
 
+def make_report(unique_id):
+    """WebSocket reporter for the in-node live widget; None when headless."""
+    if unique_id is None:
+        return None
+    try:
+        from server import PromptServer
+        if PromptServer.instance is None:
+            return None
+    except Exception:
+        return None
+    server = PromptServer.instance
+    node = str(unique_id)
+    def report(event):
+        try:
+            server.send_sync('yue2.training.progress', {'node': node, **event})
+        except Exception:
+            pass
+    return report
+
+
 class YuE2MothersuperiorAssets:
     @classmethod
     def INPUT_TYPES(cls):
@@ -166,16 +186,18 @@ class YuE2ArtistARLoRATrainer:
                 'YuE2 Training Curve node in this workflow displays it in real time '
                 '(needs matplotlib; auto-disables with a log note if unavailable). '
                 'Default: on. No effect on training itself.'}),
+        },'hidden':{
+            'unique_id':('UNIQUE_ID',),
         }}
-    RETURN_TYPES = ('STRING','STRING')
-    RETURN_NAMES = ('ar_lora_path','training_log')
+    RETURN_TYPES = ('STRING','STRING','STRING')
+    RETURN_NAMES = ('ar_lora_path','training_log','training_log_path')
     FUNCTION = 'train'
     CATEGORY = CATEGORY
     OUTPUT_NODE = True
 
     def train(self,dataset,assets,checkpoint,output_name,steps,rank,learning_rate,artist_ratio,seed,
               grad_accum=2,max_length=12288,evaluate_every=100,save_from=600,save_every=200,
-              resume_from='',resume_optimizer=True,live_curve=True):
+              resume_from='',resume_optimizer=True,live_curve=True,unique_id=None):
         import folder_paths
         from .trainer_core import native_ckpt
         from .trainer_core.mothersuperior import ar_train
@@ -203,12 +225,13 @@ class YuE2ArtistARLoRATrainer:
                 resume_optimizer=resume_optimizer,
                 live_curve=live_curve,live_curve_path=str(Path(folder_paths.get_temp_directory())/'yue2_curve_live.png'))
             try:
-                path,records = ar_train.train(model,tokenizer,dataset.items,regularizer,target,cfg,interrupt,progress_callback())
+                path,records = ar_train.train(model,tokenizer,dataset.items,regularizer,target,cfg,
+                                              interrupt,progress_callback(),report=make_report(unique_id))
             finally:
                 del model
                 gc.collect()
                 if torch.cuda.is_available(): torch.cuda.empty_cache()
-        return path,'\n'.join(json.dumps(row) for row in records)
+        return path,'\n'.join(json.dumps(row) for row in records),str(target/'training.jsonl')
 
 
 NODE_CLASS_MAPPINGS = {cls.__name__:cls for cls in (YuE2MothersuperiorAssets,YuE2RealAudioSemanticDataset,YuE2ArtistARLoRATrainer)}

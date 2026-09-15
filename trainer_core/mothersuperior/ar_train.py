@@ -213,7 +213,7 @@ def partition(artist,regularizer):
     return artist,train,validation
 
 
-def train(model,tokenizer,artist,regularizer,output_dir,cfg,check_interrupt=lambda:None,progress=lambda n,total:None):
+def train(model,tokenizer,artist,regularizer,output_dir,cfg,check_interrupt=lambda:None,progress=lambda n,total:None,report=None):
     if cfg.steps < 1 or cfg.grad_accum < 1 or cfg.evaluate_every < 1 or cfg.save_every < 1 or not 0 <= cfg.artist_ratio <= 1:
         raise ValueError('Invalid AR training counts or mixture')
     if cfg.steps > 1500:
@@ -236,6 +236,16 @@ def train(model,tokenizer,artist,regularizer,output_dir,cfg,check_interrupt=lamb
         output.mkdir(parents=True,exist_ok=False)
     records = []
     console = _Console()
+    # Live widget history: every point pushed to the frontend carries the full
+    # series so a refreshed page or a missed message self-heals.
+    history = []
+    def emit(event):
+        if report is None:
+            return
+        try:
+            report(event)
+        except Exception as exc:
+            console.status(f'live widget update failed: {exc}')
     # Live chart preview: the record stream is re-parsed and re-rendered to a
     # fixed temp PNG every few seconds (atomic replace); the Training Curve
     # node's frontend extension polls that file while the prompt runs.
@@ -283,6 +293,21 @@ def train(model,tokenizer,artist,regularizer,output_dir,cfg,check_interrupt=lamb
         else:
             console.status(json.dumps(data))
         live_lines.append(json.dumps(data))
+        if kind == 'training':
+            history.append({'step': data['step'], 'artist': data.get('artist_loss'),
+                            'minted': data.get('minted_loss'), 'lr': data.get('lr'),
+                            'grad_norm': data.get('grad_norm')})
+            emit({'type': 'point', 'step': data['step'], 'total': cfg.steps,
+                  'artist': data.get('artist_loss'), 'minted': data.get('minted_loss'),
+                  'lr': data.get('lr'), 'history': history})
+        elif kind == 'evaluation':
+            history.append({'step': data['step'], 'eval_artist': data.get('artist_loss'),
+                            'minted_val': data.get('minted_val_loss')})
+            emit({'type': 'eval', 'step': data['step'],
+                  'artist': data.get('artist_loss'), 'minted_val': data.get('minted_val_loss'),
+                  'history': history})
+        else:
+            emit({'type': 'status', 'message': json.dumps(data)})
         maybe_live()
     @torch.no_grad()
     def evaluate(step):
@@ -308,6 +333,7 @@ def train(model,tokenizer,artist,regularizer,output_dir,cfg,check_interrupt=lamb
             alpha=cfg.rank,steps=step,source='Mothersuperior/ar_lora.py',license='CC-BY-NC-4.0',
             nonzero_modules=inspection['nonzero_modules']))
         console.checkpoint(f'[save] {path.name} (step {step})')
+        emit({'type': 'checkpoint', 'step': step, 'path': path.name})
         return path
     def persist_state(step):
         try:
@@ -407,4 +433,5 @@ def train(model,tokenizer,artist,regularizer,output_dir,cfg,check_interrupt=lamb
         console.status(f'interrupted at step {last_step} — resume_from="{output}" '
                        f'to continue (steps must be > {last_step})')
         raise
+    emit({'type': 'complete', 'path': str(output/'last.safetensors'), 'step': last_step})
     return str(output/'last.safetensors'),records
