@@ -377,7 +377,11 @@ def train(model,tokenizer,artist,regularizer,output_dir,cfg,check_interrupt=lamb
             if int(float(native_meta.get('rank',cfg.rank))) != cfg.rank:
                 raise ValueError(f'Resumed checkpoint used rank {native_meta.get("rank")}; '
                                  f'this trainer is rank {cfg.rank}')
-            ar_state.copy_ab_into_modules(modules,ar_state.native_to_ab(native))
+            attn = model.model.layers[0].self_attn
+            mlp = model.model.layers[0].mlp
+            dims = {'qkv': tuple(getattr(attn,n).base.out_features for n in ('q_proj','k_proj','v_proj')),
+                    'gate_up': (mlp.gate_proj.base.out_features, mlp.up_proj.base.out_features)}
+            ar_state.copy_ab_into_modules(modules,ar_state.native_to_ab(native,dims))
             start_step = int(native_meta.get('steps',0))+1
             record(dict(kind='resumed',step=start_step-1,mode='weights-only'))
         if start_step >= cfg.steps:

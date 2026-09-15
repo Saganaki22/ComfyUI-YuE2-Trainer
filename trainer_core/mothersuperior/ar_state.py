@@ -92,11 +92,14 @@ def restore_rng(metadata):
         random.setstate(tuple(json.loads(metadata['python_rng'])))
 
 
-def native_to_ab(native):
+def native_to_ab(native, dims=None):
     """Inverse of ar_convert.convert_ar: native fused keys -> raw A/B pairs.
 
-    q/k/v (and gate/up) have equal output dims in this architecture, so fused
-    rows split evenly; shape checks at load time catch any mismatch.
+    dims: optional {'qkv': (q_out, k_out, v_out), 'gate_up': (g_out, u_out)}
+    row split of the fused projections. YuE2's AR attention is GQA, so q/k/v
+    are NOT equal (e.g. 2048/1024/1024) — when dims is omitted the split falls
+    back to equal parts and validates divisibility. Shape checks at load time
+    catch any mismatch against the injected modules.
     """
     import re
     out = {}
@@ -114,13 +117,25 @@ def native_to_ab(native):
         if m:
             layer, group, fused = m.groups()
             order = QKV_ORDER if fused == 'qkv_proj' else GATE_UP_ORDER
-            if up.shape[0] % len(order) or fused_rank % len(order):
-                raise ValueError(f'Uneven fused split for {base}')
-            part_out, part_rank = up.shape[0] // len(order), fused_rank // len(order)
-            for i, part in enumerate(order):
+            key = 'qkv' if fused == 'qkv_proj' else 'gate_up'
+            if dims and key in dims:
+                parts_out = tuple(int(d) for d in dims[key])
+                if len(parts_out) != len(order) or sum(parts_out) != up.shape[0]:
+                    raise ValueError(f'Dims {parts_out} do not match fused {base} '
+                                     f'up rows {up.shape[0]}')
+            else:
+                if up.shape[0] % len(order) or fused_rank % len(order):
+                    raise ValueError(f'Uneven fused split for {base}; pass dims')
+                parts_out = (up.shape[0] // len(order),) * len(order)
+            if fused_rank % len(order):
+                raise ValueError(f'Fused rank {fused_rank} not divisible for {base}')
+            part_rank = fused_rank // len(order)
+            row = 0
+            for i, (part, part_out) in enumerate(zip(order, parts_out)):
                 prefix = f'model.layers.{layer}.{group}.{part}'
                 out[prefix + '.lora_down.weight'] = down[i * part_rank:(i + 1) * part_rank].contiguous()
-                out[prefix + '.lora_up.weight'] = (up[i * part_out:(i + 1) * part_out, i * part_rank:(i + 1) * part_rank] / scale).contiguous()
+                out[prefix + '.lora_up.weight'] = (up[row:row + part_out, i * part_rank:(i + 1) * part_rank] / scale).contiguous()
+                row += part_out
             continue
         m = re.match(r'^text_encoders\.(model\.layers\.\d+\.(?:self_attn\.o_proj|mlp\.down_proj))$', base)
         if m:

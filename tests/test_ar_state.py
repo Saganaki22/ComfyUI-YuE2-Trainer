@@ -109,6 +109,30 @@ def test_native_to_ab_inverts_convert_ar():
         assert torch.allclose(recovered[key], value, atol=1e-6), key
 
 
+def test_native_to_ab_gqa_uneven_split():
+    """YuE2 AR is GQA: q=2048, k=v=1024 — the real model's shape."""
+    torch.manual_seed(2)
+    rank = 8
+    raw = {}
+    specs = [('self_attn.q_proj', 2048, 2048), ('self_attn.k_proj', 1024, 2048),
+             ('self_attn.v_proj', 1024, 2048), ('self_attn.o_proj', 2048, 2048),
+             ('mlp.gate_proj', 6144, 2048), ('mlp.up_proj', 6144, 2048),
+             ('mlp.down_proj', 2048, 6144)]
+    for name, out_f, in_f in specs:
+        base = f'model.layers.0.{name}'
+        raw[base + '.lora_down.weight'] = torch.randn(rank, in_f)
+        raw[base + '.lora_up.weight'] = torch.randn(out_f, rank)
+    native = convert_ar(raw)
+    dims = {'qkv': (2048, 1024, 1024), 'gate_up': (6144, 6144)}
+    recovered = native_to_ab(native, dims)
+    assert set(recovered) == set(raw)
+    for key, value in raw.items():
+        assert torch.allclose(recovered[key], value, atol=1e-6), key
+    # Without dims, the uneven qkv must refuse to guess.
+    with pytest.raises(ValueError, match='Uneven fused split'):
+        native_to_ab(native)
+
+
 def test_native_to_ab_rejects_unknown_keys():
     with pytest.raises(ValueError, match='Unexpected native AR key'):
         native_to_ab({'text_encoders.model.layers.0.self_attn.bogus_proj.lora_down.weight':
