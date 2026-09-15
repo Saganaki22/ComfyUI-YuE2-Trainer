@@ -87,7 +87,9 @@ def restore_rng(metadata):
     if 'torch' in rng:
         torch.set_rng_state(torch.from_numpy(np.frombuffer(bytes.fromhex(rng['torch']), dtype=np.uint8).copy()))
     if 'cuda' in rng and torch.cuda.is_available():
-        torch.cuda.set_rng_state(torch.from_numpy(np.frombuffer(bytes.fromhex(rng['cuda']), dtype=np.uint8).copy()).cuda())
+        # torch.cuda.set_rng_state insists on a CPU ByteTensor (it moves the
+        # state to the device itself); passing a CUDA tensor raises.
+        torch.cuda.set_rng_state(torch.from_numpy(np.frombuffer(bytes.fromhex(rng['cuda']), dtype=np.uint8).copy()))
     if metadata.get('python_rng'):
         random.setstate(tuple(json.loads(metadata['python_rng'])))
 

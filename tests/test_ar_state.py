@@ -74,6 +74,11 @@ def test_state_roundtrip(tmp_path):
     assert cfg['rank'] == 64
     assert 'live_curve_path' not in cfg  # machine-local path must not travel
 
+    # RNG restore must not raise (torch.cuda.set_rng_state wants a CPU tensor).
+    from trainer_core.mothersuperior.ar_state import restore_rng
+    torch.manual_seed(123)
+    restore_rng(meta)
+
 
 def test_load_state_rejects_wrong_format(tmp_path):
     from safetensors.torch import save_file
