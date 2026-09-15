@@ -301,7 +301,7 @@ class TrainingWidget {
   }
 }
 
-const widgets = new Map();
+const widgets = new Set();
 let eventCount = 0;
 
 function comfyClassOf(node) {
@@ -316,38 +316,36 @@ app.registerExtension({
   nodeCreated(node) {
     const cls = comfyClassOf(node);
     if (cls !== TARGET_CLASS) return;
-    console.log("[yue2-monitor] attaching to node", node.id);
-    node.setSize([Math.max(node.size[0], 420), Math.max(node.size[1], 300)]);
-
+    // nodeCreated fires before the node joins the graph (id may be -1), so
+    // build the widget immediately - DOM construction is safe on a detached
+    // container - and track instances without depending on node ids.
     const container = document.createElement("div");
     const widget = node.addDOMWidget("yue2_training", "yue2_training", container);
     widget.serialize = false;
     widget.type = "yue2_training";
+    node.setSize([Math.max(node.size[0], 420), Math.max(node.size[1], 300)]);
 
-    let instance = null;
-    const timer = setInterval(() => {
-      if (!container.isConnected) return;
-      clearInterval(timer);
-      instance = new TrainingWidget(node, container);
-      widgets.set(node.id, instance);
-      // The node must never shrink below the widget's natural height,
-      // otherwise the chart/options get clipped with no scrollbar.
-      const minW = 420;
-      const minH = Math.max(200, container.offsetHeight + 16);
-      const prevResize = node.onResize;
-      node.onResize = function () {
-        if (this.size[0] < minW) this.size[0] = minW;
-        if (this.size[1] < minH) this.size[1] = minH;
-        if (prevResize) prevResize.apply(this, arguments);
-      };
-    }, 150);
+    const instance = new TrainingWidget(node, container);
+    widgets.add(instance);
+    console.log("[yue2-monitor] widget built for", cls);
+
+    // The node must never shrink below the widget's natural height,
+    // otherwise the chart/options get clipped with no scrollbar. Measured
+    // lazily: the container has no size while detached at nodeCreated.
+    const minW = 420;
+    const prevResize = node.onResize;
+    node.onResize = function () {
+      const minH = Math.max(200, (container.offsetHeight || 0) + 16);
+      if (this.size[0] < minW) this.size[0] = minW;
+      if (this.size[1] < minH) this.size[1] = minH;
+      if (prevResize) prevResize.apply(this, arguments);
+    };
 
     const prevRemove = node.onRemoved;
     node.onRemoved = function () {
-      clearInterval(timer);
-      widgets.get(node.id)?.dispose();
-      widgets.delete(node.id);
-      prevRemove?.apply(this, arguments);
+      instance.dispose();
+      widgets.delete(instance);
+      if (prevRemove) prevRemove.apply(this, arguments);
     };
   },
 });
@@ -357,5 +355,5 @@ app.registerExtension({
 api.addEventListener(EVENT, (event) => {
   const detail = event.detail;
   if (!detail) return;
-  for (const instance of widgets.values()) instance.update(detail);
+  for (const instance of widgets) instance.update(detail);
 });
