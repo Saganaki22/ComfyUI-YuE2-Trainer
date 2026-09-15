@@ -91,7 +91,8 @@ def restore_rng(metadata):
         # state to the device itself); passing a CUDA tensor raises.
         torch.cuda.set_rng_state(torch.from_numpy(np.frombuffer(bytes.fromhex(rng['cuda']), dtype=np.uint8).copy()))
     if metadata.get('python_rng'):
-        random.setstate(tuple(json.loads(metadata['python_rng'])))
+        version, state_vector, gauss = json.loads(metadata['python_rng'])
+        random.setstate((version, tuple(state_vector), gauss))
 
 
 def native_to_ab(native, dims=None):
