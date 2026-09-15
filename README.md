@@ -247,6 +247,16 @@ drag the JSON into the ComfyUI window:
   YuE2 implementation that the native-format LoRA output targets.
 - **[Comfy-Org/YuE2](https://huggingface.co/Comfy-Org/YuE2)** — the official
   single-file checkpoint repack the trainer can load directly.
+- **[Mothersuperior](https://huggingface.co/Mothersuperior)** — the real-audio
+  tokenizer head, NAR adapter, minted regularizer corpus, and training scripts
+  that power the Artist Training path
+  ([yue2-mothersuperior-realaudio-tokenizer-v4](https://huggingface.co/Mothersuperior/yue2-mothersuperior-realaudio-tokenizer-v4),
+  [yue2-minted-corpus](https://huggingface.co/datasets/Mothersuperior/yue2-minted-corpus)),
+  CC BY-NC 4.0.
+- **[drbaph](https://huggingface.co/drbaph)** — the pre-converted safetensors
+  builds of the Mothersuperior assets
+  ([yue2-mothersuperior-realaudio-tokenizer-comfyui](https://huggingface.co/drbaph/yue2-mothersuperior-realaudio-tokenizer-comfyui))
+  the trainer downloads by default.
 
 ## License
 
@@ -268,5 +278,15 @@ Third-party components keep their own licenses and **must be respected**:
   `trainer_core/yue2_ref/`): [Apache License 2.0](https://www.apache.org/licenses/LICENSE-2.0),
   © m-a-p; its third-party notices are preserved in
   `trainer_core/yue2_ref/licenses/`.
+- **Mothersuperior assets** (the tokenizer head, NAR adapter, and minted
+  regularizer pack from
+  [yue2-mothersuperior-realaudio-tokenizer-v4](https://huggingface.co/Mothersuperior/yue2-mothersuperior-realaudio-tokenizer-v4)
+  and [yue2-minted-corpus](https://huggingface.co/datasets/Mothersuperior/yue2-minted-corpus),
+  including the
+  [drbaph safetensors conversions](https://huggingface.co/drbaph/yue2-mothersuperior-realaudio-tokenizer-comfyui))
+  are licensed **[CC BY-NC 4.0](https://creativecommons.org/licenses/by-nc/4.0/)**
+  by the Mothersuperior authors — **non-commercial use only**. They derive from
+  YuE2-3B weights, and the upstream scripts are provided as-is; LoRAs trained
+  with these assets carry the same terms.
 - Your training data is your own responsibility: only train on audio you have
   the rights to use.
