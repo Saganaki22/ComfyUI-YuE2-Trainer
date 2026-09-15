@@ -15,3 +15,5 @@ Thumbs.db
 # Local test artifacts
 *.npy
 smoke_lora_test.safetensors
+.pytest_cache/
+.artifacts/

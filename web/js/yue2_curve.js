@@ -70,7 +70,7 @@ app.registerExtension({
         // onExecuted will immediately replace the live frame with the final chart.
         api.addEventListener("executed", (event) => {
             const node = app.graph?.getNodeById(event.detail?.node);
-            if (node && (node.type === "YuE2LoRATrainer" || node.type === "YuE2TrainingCurve")) {
+            if (node && (node.type === "YuE2LoRATrainer" || node.type === "YuE2ArtistARLoRATrainer" || node.type === "YuE2TrainingCurve")) {
                 stopPolling();
             }
         });

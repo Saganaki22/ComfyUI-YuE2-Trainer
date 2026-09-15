@@ -3,9 +3,19 @@
 The YuE2 LoRA Trainer emits lines like
     step 10/3000  loss=2.05150  lr=1.00e-04  t=0.463  [song.mp3 #2]  0.14s/it
 which this module parses and plots in a dark, ComfyUI-styled figure.
+
+The YuE2 Artist AR LoRA Trainer instead emits one JSON object per line, e.g.
+    {"kind": "training", "step": 3, "lr": 6e-06, "grad_norm": 0.22,
+     "artist_loss": 6.06, "minted_loss": 3.71}
+    {"kind": "evaluation", "step": 3, "artist_loss": 6.06, "minted_val_loss": 3.77}
+    {"kind": "configuration", "trainable_parameters": 4358144, ...}
+The artist loss is the main curve; minted training loss is a faint second line
+and the held-out minted_val points are plotted as red markers — that series
+must stay flat, a rising value means the LoRA is damaging YuE2's token grammar.
 """
 from __future__ import annotations
 
+import json
 import re
 from pathlib import Path
 
@@ -17,16 +27,78 @@ LORA_RE = re.compile(r"final LoRA saved.*:\s*(.+)$")
 TRIGGER_RE = re.compile(r"trigger='([^']*)'")
 
 
+def _parse_ar_line(line, state):
+    """Consume one JSONL record from the AR trainer; True if the line matched."""
+    try:
+        row = json.loads(line)
+    except ValueError:
+        return False
+    if not isinstance(row, dict) or "kind" not in row:
+        return False
+    kind = row["kind"]
+    if kind == "configuration":
+        cfg = row.get("config") or {}
+        state["meta"]["ar"] = True
+        state["meta"]["total"] = cfg.get("steps", 0)
+    elif kind in ("training", "evaluation"):
+        state["meta"]["ar"] = True
+        step = row.get("step")
+        if step is None:
+            return True
+        if kind == "training":
+            if row.get("lr") is not None:
+                state["lrs"][step] = row["lr"]
+            if row.get("artist_loss") is not None:
+                state["artist"][step] = row["artist_loss"]
+            if row.get("minted_loss") is not None:
+                state["minted_train"][step] = row["minted_loss"]
+        else:
+            if row.get("artist_loss") is not None:
+                state["artist_eval"][step] = row["artist_loss"]
+            if row.get("minted_val_loss") is not None:
+                state["minted_val"][step] = row["minted_val_loss"]
+    return True
+
+
 def parse_log(text: str):
     """Return (steps, losses, lrs, meta) parsed from a training_log string."""
     steps, losses, lrs = [], [], []
+    ar = {"artist": {}, "minted_train": {}, "artist_eval": {},
+          "minted_val": {}, "lrs": {}, "meta": {}}
+    legacy = False
     for line in text.splitlines():
-        m = STEP_RE.search(line)
-        if m:
-            steps.append(int(m.group(1)))
-            losses.append(float(m.group(3)))
-            lrs.append(float(m.group(4)))
+        if not legacy and line.lstrip().startswith("{"):
+            _parse_ar_line(line, ar)
+        else:
+            legacy = True
+            m = STEP_RE.search(line)
+            if m:
+                steps.append(int(m.group(1)))
+                losses.append(float(m.group(3)))
+                lrs.append(float(m.group(4)))
     meta = {"total": 0, "lora_name": "", "trigger": ""}
+    if ar["artist"] or ar["minted_train"]:
+        # AR trainer log: main curve is the artist loss (minted-only runs fall
+        # back to the minted training loss), lr carried per step.
+        by_step = ar["artist"] or ar["minted_train"]
+        steps = sorted(by_step)
+        losses = [by_step[s] for s in steps]
+        lrs = []
+        last = None
+        for s in steps:
+            last = ar["lrs"].get(s, last)
+            lrs.append(last if last is not None else 0.0)
+        meta.update(ar["meta"])
+        meta["series"] = [
+            ("minted train loss", sorted(ar["minted_train"].items()),
+             "#a78bfa", "line"),
+            ("artist eval loss", sorted(ar["artist_eval"].items()),
+             "#f8fafc", "scatter"),
+            ("minted val (must stay flat)", sorted(ar["minted_val"].items()),
+             "#f87171", "scatter"),
+        ]
+        meta["series"] = [(n, [s for s, _ in pts], [v for _, v in pts], c, st)
+                          for n, pts, c, st in meta["series"] if pts]
     for line in text.splitlines():
         m = LORA_RE.search(line)
         if m:
@@ -78,8 +150,20 @@ def render_chart(steps, losses, lrs, meta, out_path,
     sm = smooth_curve(loss, smooth)
     ax1.plot(x, sm, color="#22d3ee", linewidth=2.2, label="loss (smoothed)")
     ax1.fill_between(x, sm, loss.min(), color="#22d3ee", alpha=0.06)
+    # Extra AR-trainer series: minted train line + held-out eval markers.
+    for name, xs, ys, color, style in meta.get("series", []):
+        xs = np.asarray(xs)
+        ys = np.asarray(ys)
+        if style == "scatter":
+            ax1.plot(xs, ys, "o", color=color, markersize=4.5,
+                     markeredgecolor="#0b1220", markeredgewidth=0.4,
+                     linestyle="None", label=name, zorder=5)
+        else:
+            ax1.plot(xs, ys, color=color, linewidth=1.0, alpha=0.55,
+                     label=name)
     ax1.set_xlabel("step", color="#9fb3c8")
-    ax1.set_ylabel("flow-matching loss", color="#22d3ee")
+    ax1.set_ylabel("cross-entropy loss" if meta.get("ar")
+                   else "flow-matching loss", color="#22d3ee")
     ax1.tick_params(axis="y", colors="#22d3ee")
     ax1.tick_params(axis="x", colors="#9fb3c8")
     ax1.grid(True, color="#1e3a5f", alpha=0.45, linewidth=0.6)
@@ -109,7 +193,7 @@ def render_chart(steps, losses, lrs, meta, out_path,
     if not show_lr:
         ax1.spines["right"].set_color("#1e3a5f")
 
-    title = "YuE2 LoRA training"
+    title = "YuE2 AR artist training" if meta.get("ar") else "YuE2 LoRA training"
     if meta.get("lora_name"):
         title += f" — {meta['lora_name']}"
     subtitle_bits = []

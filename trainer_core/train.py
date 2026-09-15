@@ -45,7 +45,7 @@ def _comfy_progress(total):
 
 def _check_interrupt():
     try:
-        import model_management
+        from comfy import model_management
         model_management.throw_exception_if_processing_interrupted()
     except ImportError:
         return
@@ -150,6 +150,7 @@ def _save_lora(model, path, metadata: dict, params=None, ema=None):
     """
     from safetensors.torch import save_file
     from . import convert as convert_mod
+    from .inspection import inspect_tensors
     backup = None
     if ema is not None and params is not None:
         backup = [p.detach().clone() for p in params]
@@ -159,6 +160,9 @@ def _save_lora(model, path, metadata: dict, params=None, ema=None):
     try:
         state = lora_mod.lora_state_dict(model)
         native_sd, _ = convert_mod.convert_tensors(state, metadata)
+        inspection = inspect_tensors(native_sd)
+        log.info("Exporting %d nonzero native NAR LoRA modules; inference key matching must be checked against the target MODEL",
+                 inspection['nonzero_modules'])
         save_file(native_sd, str(path), metadata=convert_mod.native_metadata(metadata))
     finally:
         if backup is not None:

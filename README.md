@@ -1,13 +1,14 @@
 # ComfyUI-YuE2-Trainer
 
 LoRA training nodes for **[m-a-p/YuE2-3B](https://huggingface.co/m-a-p/YuE2-3B)** inside ComfyUI.
-THESE NODES ARE STILL EXPERIMENTAL! Please help improve them by sending Pull Requests.
-- The Loras works better with the FP16 model (not convrot)
-- Dont use ABC code, it may affect the LoRa
-- 5000 Steps with Weight 2.0 works best. Voice cloning still dont work.
+**NAR Style LoRA is legacy/experimental.** The current path has demonstrated
+nonzero learned deltas and a measurable native NAR forward effect in a short
+synthetic diagnostic. Artist resemblance and perceptual benefit remain unverified;
+there is no established best step count or strength. See the [issue #1 audit](docs/issue-1-audit.md).
 
-Train YuE2 on your own music (mp3 / wav / flac) with a **trigger word**, so the model
-learns the **style, instrumentation and vocal timbre** of your source files. No caption
+Train YuE2's acoustic branch on your own music (mp3 / wav / flac) with a **trigger word**.
+This optimizes reconstruction of recording latents; it does not establish that the model
+will reproduce the artist's style or voice. No caption
 files required (optional same-named `.txt` captions are supported).
 <img width="909" height="483" alt="image" src="https://github.com/user-attachments/assets/19a1d98d-3469-4be6-828d-1c11722a283b" />
 
@@ -28,6 +29,28 @@ a 1.5B NAR flow-matching branch (renders 64-channel VAE latents into sound), and
 The AR "composer" branch stays frozen (m-a-p has not released an audio→token encoder or
 training code), so this is a *style/timbre* LoRA, not a full voice clone.
 License note: YuE2 weights are CC BY-NC 4.0 — non-commercial use only.
+
+### Check whether a LoRA is active
+
+Use **YuE2 NAR LoRA Loader (verified keys)** between the checkpoint MODEL and
+the sampler. Its report includes per-module down/up/delta norms, candidate patches,
+matched keys, strength, and disabled status. It rejects zero deltas and missing
+targets. A match is evidence of applicability; it is not proof of perceptual quality.
+Strength zero returns an unpatched clone. Existing node IDs and input schemas are retained.
+
+For a numerical GPU check, run `tools/verify_native_lora.py` with your ComfyUI
+venv and `--comfy-root`, `--checkpoint`, `--lora`, and `--report` paths. It uses
+the standard native loader and checks strengths 0/1/2/0 against fixed synthetic
+conditioning. The report distinguishes this from generated song conditioning.
+
+The recommended Artist Training path (MERT → tokenizer head → semantic tokens →
+AR LoRA, with the minted-corpus regularizer) is **implemented and verified on this
+branch**: a 4 s real-song excerpt produced bit-exact upstream-parity semantic IDs,
+three AR training steps produced nonzero deltas in all 112 targeted native modules,
+and the trained adapter measurably changed deterministic native AR logits at
+strengths 1 and 2 (max abs diff 0.19 / 0.25) while strength 0 restored baseline
+exactly. See [docs/issue-1-audit.md](docs/issue-1-audit.md). This is a wiring and
+effect proof, not an artist-resemblance result.
 
 ## Requirements
 

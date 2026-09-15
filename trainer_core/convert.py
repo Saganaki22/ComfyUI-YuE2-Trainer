@@ -96,6 +96,13 @@ def convert_tensors(tensors: dict[str, torch.Tensor], metadata: dict):
         elif key.endswith(".lora_up.weight"):
             ups[key[: -len(".lora_up.weight")]] = tensor
 
+    if downs.keys() != ups.keys():
+        raise ValueError("LoRA has unmatched down/up matrices: " + str(sorted(downs.keys() ^ ups.keys())))
+    for name, down in downs.items():
+        up = ups[name]
+        if down.ndim != 2 or up.ndim != 2 or down.shape[0] != rank or up.shape[1] != rank:
+            raise ValueError(f"Invalid or inconsistent LoRA rank for {name}")
+
     out: dict[str, torch.Tensor] = {}
     converted, used = [], set()
     layers = sorted({int(m.group(1)) for key in downs
@@ -143,6 +150,9 @@ def convert_tensors(tensors: dict[str, torch.Tensor], metadata: dict):
             used.add(trainer_name)
 
     skipped = sorted(set(downs) - used)
+
+    if skipped:
+        raise ValueError("Cannot convert all LoRA targets (incomplete fusion or unknown keys): " + ", ".join(skipped))
 
     if not out:
         raise RuntimeError("Nothing convertible found — is this a YuE2-Trainer LoRA?")

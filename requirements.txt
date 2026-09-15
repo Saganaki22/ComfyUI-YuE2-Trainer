@@ -5,3 +5,9 @@ soundfile>=0.12
 
 # Optional chart rendering for the YuE2 Training Curve node.
 matplotlib>=3.7
+
+# Mothersuperior real-audio semantic preprocessing and safe asset migration.
+transformers
+huggingface_hub
+safetensors
+scipy

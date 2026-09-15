@@ -1,0 +1,281 @@
+{
+  "id": "yue2-trainer-03-artist-ar-training",
+  "revision": 0,
+  "last_node_id": 4,
+  "last_link_id": 4,
+  "nodes": [
+    {
+      "id": 1,
+      "type": "YuE2MothersuperiorAssets",
+      "pos": [
+        -860,
+        -220
+      ],
+      "size": [
+        380,
+        130
+      ],
+      "flags": {},
+      "order": 0,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "assets",
+          "type": "YUE2_MS_ASSETS",
+          "slot_index": 0,
+          "links": [
+            1,
+            3
+          ]
+        },
+        {
+          "name": "summary",
+          "type": "STRING",
+          "links": null
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "YuE2MothersuperiorAssets"
+      },
+      "widgets_values": [
+        true,
+        false,
+        ""
+      ],
+      "widgets_values_named": {
+        "auto_download": true,
+        "include_nar_adapter": false,
+        "asset_directory": ""
+      }
+    },
+    {
+      "id": 2,
+      "type": "YuE2RealAudioSemanticDataset",
+      "pos": [
+        -420,
+        -220
+      ],
+      "size": [
+        400,
+        220
+      ],
+      "flags": {},
+      "order": 1,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "assets",
+          "type": "YUE2_MS_ASSETS",
+          "link": 1
+        }
+      ],
+      "outputs": [
+        {
+          "name": "dataset",
+          "type": "YUE2_SEMANTIC_DATASET",
+          "slot_index": 0,
+          "links": [
+            2
+          ]
+        },
+        {
+          "name": "summary",
+          "type": "STRING",
+          "links": null
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "YuE2RealAudioSemanticDataset"
+      },
+      "widgets_values": [
+        "C:\\Users\\drbaph\\Music\\my_artist",
+        "my_artist",
+        false,
+        "",
+        false,
+        1
+      ],
+      "widgets_values_named": {
+        "audio_folder": "C:\\Users\\drbaph\\Music\\my_artist",
+        "trigger_word": "my_artist",
+        "force_reencode": false,
+        "semantic_cache_folder": "",
+        "lyrics_required": false,
+        "mert_batch_size": 1
+      }
+    },
+    {
+      "id": 3,
+      "type": "YuE2ArtistARLoRATrainer",
+      "pos": [
+        20,
+        -220
+      ],
+      "size": [
+        380,
+        330
+      ],
+      "flags": {},
+      "order": 2,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "dataset",
+          "type": "YUE2_SEMANTIC_DATASET",
+          "link": 2
+        },
+        {
+          "name": "assets",
+          "type": "YUE2_MS_ASSETS",
+          "link": 3
+        }
+      ],
+      "outputs": [
+        {
+          "name": "ar_lora_path",
+          "type": "STRING",
+          "links": null
+        },
+        {
+          "name": "training_log",
+          "type": "STRING",
+          "slot_index": 1,
+          "links": [
+            4
+          ]
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "YuE2ArtistARLoRATrainer"
+      },
+      "widgets_values": [
+        "yue2_3b_bf16.safetensors",
+        "my_artist_ar",
+        300,
+        64,
+        0.0001,
+        0.5,
+        1,
+        2,
+        12288,
+        100,
+        true
+      ],
+      "widgets_values_named": {
+        "checkpoint": "yue2_3b_bf16.safetensors",
+        "output_name": "my_artist_ar",
+        "steps": 300,
+        "rank": 64,
+        "learning_rate": 0.0001,
+        "artist_ratio": 0.5,
+        "seed": 1,
+        "grad_accum": 2,
+        "max_length": 12288,
+        "evaluate_every": 100,
+        "live_curve": true
+      }
+    },
+    {
+      "id": 4,
+      "type": "YuE2TrainingCurve",
+      "pos": [
+        460,
+        -220
+      ],
+      "size": [
+        510,
+        490
+      ],
+      "flags": {},
+      "order": 3,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "training_log",
+          "type": "STRING",
+          "link": 4
+        }
+      ],
+      "outputs": [
+        {
+          "name": "chart",
+          "type": "IMAGE",
+          "links": null
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "YuE2TrainingCurve"
+      },
+      "widgets_values": [
+        25,
+        true,
+        true
+      ],
+      "widgets_values_named": {
+        "smooth": 25,
+        "show_raw": true,
+        "show_lr": true
+      }
+    }
+  ],
+  "links": [
+    [
+      1,
+      1,
+      0,
+      2,
+      0,
+      "YUE2_MS_ASSETS"
+    ],
+    [
+      2,
+      2,
+      0,
+      3,
+      0,
+      "YUE2_SEMANTIC_DATASET"
+    ],
+    [
+      3,
+      1,
+      0,
+      3,
+      1,
+      "YUE2_MS_ASSETS"
+    ],
+    [
+      4,
+      3,
+      1,
+      4,
+      0,
+      "STRING"
+    ]
+  ],
+  "groups": [
+    {
+      "id": 1,
+      "title": "Artist AR training (recommended): songs folder -> MERT -> tokenizer head -> semantic IDs -> AR LoRA. Songs: <name>.flac + optional <name>.txt style (starts with trigger) + optional <name>.lyrics.txt",
+      "bounding": [
+        -900,
+        -300,
+        1360,
+        560
+      ],
+      "color": "#3f789e",
+      "flags": {}
+    }
+  ],
+  "config": {},
+  "extra": {
+    "ds": {
+      "scale": 1.5,
+      "offset": [
+        300,
+        250
+      ]
+    }
+  },
+  "version": 0.4
+}

@@ -98,7 +98,7 @@ class YuE2TrainingDataset:
     RETURN_TYPES = ("YUE2_TRAIN_DATASET", "STRING")
     RETURN_NAMES = ("dataset", "summary")
     FUNCTION = "build"
-    CATEGORY = CATEGORY
+    CATEGORY = "YuE2/Training/NAR Style LoRA (legacy-experimental)"
 
     def build(self, checkpoint, audio_folder, clip_seconds, caption_mode,
               default_caption, cache_folder, force_reencode):
@@ -156,7 +156,8 @@ class YuE2LoRATrainer:
     @classmethod
     def INPUT_TYPES(cls):
         return {"required": {
-            "dataset": ("YUE2_TRAIN_DATASET",),
+            "dataset": ("YUE2_TRAIN_DATASET", {
+                "tooltip": "Connect the dataset output of YuE2 Training Dataset."}),
             "checkpoint": (_checkpoint_choices(), {
                 "tooltip": "Native YuE2 all-in-one checkpoint (models/checkpoints) "
                            "the LoRA is trained on — pick the same file you "
@@ -225,7 +226,7 @@ class YuE2LoRATrainer:
     RETURN_TYPES = ("STRING", "STRING")
     RETURN_NAMES = ("lora_path", "training_log")
     FUNCTION = "train"
-    CATEGORY = CATEGORY
+    CATEGORY = "YuE2/Training/NAR Style LoRA (legacy-experimental)"
 
     def train(self, dataset, checkpoint, trigger_word, steps, learning_rate, rank,
               alpha, lora_dropout, target_preset, lora_name, seed, optimizer,
@@ -346,13 +347,43 @@ class YuE2TrainingCurve:
                 "result": (tensor,)}
 
 
+class YuE2VerifiedNARLoRALoader:
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {"required": {
+            "model": ("MODEL", {
+                "tooltip": "YuE2 MODEL from the native checkpoint (or upstream of this loader)."}),
+            "lora_name": (_folder_paths().get_filename_list("loras"), {
+                "tooltip": "NAR LoRA in models/loras — trained by YuE2 LoRA Trainer in native format."}),
+            "strength": ("FLOAT", {"default": 1.0, "min": -20.0, "max": 20.0,
+                "step": 0.05, "tooltip": "Zero disables the adapter. Validates nonzero deltas and requires every target to match the MODEL."}),
+        }}
+
+    RETURN_TYPES = ("MODEL", "STRING")
+    RETURN_NAMES = ("model", "inspection_report")
+    FUNCTION = "load"
+    CATEGORY = "YuE2/Training/NAR Style LoRA (legacy-experimental)"
+
+    def load(self, model, lora_name, strength):
+        from safetensors.torch import load_file
+        from .trainer_core.inspection import apply_nar_lora
+        path = _folder_paths().get_full_path_or_raise("loras", lora_name)
+        return apply_nar_lora(model, load_file(path), strength)
+
+
 NODE_CLASS_MAPPINGS = {
     "YuE2TrainingDataset": YuE2TrainingDataset,
     "YuE2LoRATrainer": YuE2LoRATrainer,
     "YuE2TrainingCurve": YuE2TrainingCurve,
+    "YuE2VerifiedNARLoRALoader": YuE2VerifiedNARLoRALoader,
 }
 NODE_DISPLAY_NAME_MAPPINGS = {
     "YuE2TrainingDataset": "YuE2 Training Dataset (audio folder)",
     "YuE2LoRATrainer": "YuE2 LoRA Trainer",
     "YuE2TrainingCurve": "YuE2 Training Curve (loss/LR chart)",
+    "YuE2VerifiedNARLoRALoader": "YuE2 NAR LoRA Loader (verified keys)",
 }
+
+from .mothersuperior_nodes import NODE_CLASS_MAPPINGS as ARTIST_NODES, NODE_DISPLAY_NAME_MAPPINGS as ARTIST_NAMES
+NODE_CLASS_MAPPINGS.update(ARTIST_NODES)
+NODE_DISPLAY_NAME_MAPPINGS.update(ARTIST_NAMES)
