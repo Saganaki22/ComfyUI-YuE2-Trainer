@@ -369,6 +369,7 @@ def train(model,tokenizer,artist,regularizer,output_dir,cfg,check_interrupt=lamb
             last = output/'last.safetensors'
             if not last.exists():
                 raise ValueError(f'No {ar_state.STATE_FILE} or last.safetensors in {output}')
+            from safetensors import safe_open
             from safetensors.torch import load_file
             with safe_open(str(last),framework='pt') as handle:
                 native_meta = handle.metadata() or {}
