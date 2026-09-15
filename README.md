@@ -80,6 +80,44 @@ contains the language model, the acoustic (NAR) branch, the VAE and the
 tokenizer, so one download covers training *and* generation. Use the **bf16**
 file; the INT8 quantized variant cannot be trained.
 
+### Artist Training assets (optional - auto-downloaded)
+
+The recommended Artist Training path additionally needs the pre-converted
+Mothersuperior safetensors and MERT-v2-FullSong. You don't have to download
+anything by hand: the **YuE2 Mothersuperior Assets** node fetches pinned
+revisions on first run when `auto_download` is on, then reuses them forever.
+Manual placement also works - the node picks up existing files without
+touching the network.
+
+Layout (links point at
+[drbaph/yue2-mothersuperior-realaudio-tokenizer-comfyui](https://huggingface.co/drbaph/yue2-mothersuperior-realaudio-tokenizer-comfyui),
+a safetensors conversion of
+[Mothersuperior/yue2-mothersuperior-realaudio-tokenizer-v4](https://huggingface.co/Mothersuperior/yue2-mothersuperior-realaudio-tokenizer-v4),
+CC BY-NC 4.0):
+
+```
+📂 ComfyUI/
+└── 📂 models/
+    └── 📂 yue2_trainer/
+        └── 📂 mothersuperior/
+            ├── tokenizer_head_joint_v4.safetensors
+            ├── minted_regularizer_pack.safetensors
+            ├── minted_regularizer_pack.jsonl
+            ├── nar_lora_joint_v4.safetensors   (optional - pretrained NAR adapter only)
+            └── 📂 hf_cache/                    (MERT-v2-FullSong snapshot + download cache)
+```
+
+| File | Source | What it is |
+| --- | --- | --- |
+| `tokenizer_head_joint_v4.safetensors` | [HF](https://huggingface.co/drbaph/yue2-mothersuperior-realaudio-tokenizer-comfyui/blob/main/tokenizer_head_joint_v4.safetensors) | MERT features → 32,768 YuE2 semantic codes (the audio→token encoder YuE2 doesn't ship) |
+| `minted_regularizer_pack.safetensors` + `.jsonl` | [HF](https://huggingface.co/drbaph/yue2-mothersuperior-realaudio-tokenizer-comfyui/blob/main/minted_regularizer_pack.safetensors) | 4,732 YuE2-generated songs; 50% of AR training batches so a small artist set can't collapse the token grammar |
+| `nar_lora_joint_v4.safetensors` | [HF](https://huggingface.co/drbaph/yue2-mothersuperior-realaudio-tokenizer-comfyui/blob/main/nar_lora_joint_v4.safetensors) | Pretrained NAR adapter (rank-32 LoRAs + full vae2llm/llm2vae replacements) - NAR experiments only, not needed for AR training |
+| MERT-v2-FullSong snapshot | [m-a-p/MERT-v2-FullSong](https://huggingface.co/m-a-p/MERT-v2-FullSong) | Feature extractor for the tokenizer head (cached in `hf_cache/`) |
+
+Every safetensors file embeds its source `.pt` SHA-256 and license in its
+metadata header, so you can verify the conversion against the upstream
+pickles at any time.
+
 ## Install
 
 **Recommended: git clone** (makes updating easy with `git pull`):
