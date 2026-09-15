@@ -103,8 +103,7 @@ CC BY-NC 4.0):
             ├── tokenizer_head_joint_v4.safetensors
             ├── minted_regularizer_pack.safetensors
             ├── minted_regularizer_pack.jsonl
-            ├── nar_lora_joint_v4.safetensors   (optional - pretrained NAR adapter only)
-            └── 📂 hf_cache/                    (MERT-v2-FullSong snapshot + download cache)
+            └── nar_lora_joint_v4.safetensors   (optional - pretrained NAR adapter only)
 ```
 
 | File | Source | What it is |
