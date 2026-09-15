@@ -61,6 +61,7 @@ class TrainingWidget {
     this.node = node;
     this.history = [];
     this.total = 0;
+    this.lastRun = null;
     this.opts = loadOpts();
 
     container.style.cssText =
@@ -123,6 +124,13 @@ class TrainingWidget {
 
   update(event) {
     if (!this.accepts(event)) return;
+    // A new run name means a fresh training: clear before applying the
+    // (self-contained, full-history) event.
+    if (event.run && event.run !== this.lastRun) {
+      this.lastRun = event.run;
+      this.history = [];
+      this.total = 0;
+    }
     if (event.history) this.history = event.history;
     if (event.total) this.total = event.total;
     if (event.type === "point" || event.type === "eval") {
@@ -327,16 +335,10 @@ app.registerExtension({
   },
 });
 
+// Events are broadcast to every monitor instance; each filters by its `run`
+// widget (blank = follow the most recent run).
 api.addEventListener(EVENT, (event) => {
   const detail = event.detail;
-  if (!detail?.node) return;
-  const instance = widgets.get(Number(detail.node));
-  if (instance) instance.update(detail);
-});
-
-api.addEventListener("executing", (event) => {
-  const detail = event.detail;
-  if (!detail?.node) return;
-  const instance = widgets.get(Number(detail.node));
-  if (instance) instance.reset();
+  if (!detail) return;
+  for (const instance of widgets.values()) instance.update(detail);
 });
