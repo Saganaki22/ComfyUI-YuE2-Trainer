@@ -142,6 +142,7 @@ def render_chart(steps, losses, lrs, meta, out_path,
     fig, ax1 = plt.subplots(figsize=figsize, dpi=dpi)
     fig.patch.set_facecolor("#0b1220")
     ax1.set_facecolor("#0b1220")
+    ax1.margins(y=0.12)
 
     # Loss (left axis): raw faint trace + smoothed glow line
     if show_raw:
@@ -174,13 +175,12 @@ def render_chart(steps, losses, lrs, meta, out_path,
     if show_lr:
         ax2 = ax1.twinx()
         ax2.set_facecolor("#0b1220")
+        ax2.margins(y=0.25)
         ax2.plot(x, lr, color="#f59e0b", linewidth=1.8, alpha=0.9,
                  label="learning rate")
         ax2.set_yscale("log")
         ax2.set_ylabel("learning rate", color="#f59e0b")
-        ax2.tick_params(axis="y", colors="#f59e0b")
-        ax2.yaxis.get_offset_text().set_color("#f59e0b")
-        ax2.spines["right"].set_color("#f59e0b")
+        ax2.tick_params(axis="y", colors="#f59e0b", which="both")
         lines = ax1.get_legend_handles_labels()
         lines2 = ax2.get_legend_handles_labels()
         ax1.legend(lines[0] + lines2[0], lines[1] + lines2[1],
@@ -211,7 +211,13 @@ def render_chart(steps, losses, lrs, meta, out_path,
                   color="#dbe7f3", fontsize=11, pad=10)
 
     fig.tight_layout()
-    fig.savefig(str(out_path), facecolor=fig.get_facecolor(),
-                bbox_inches="tight")
+    # Theme the tick labels at the very last moment: log axes regenerate
+    # labels at draw time (major vs minor depends on the data range) and
+    # tight_layout can recreate them, so anything colored earlier is lost.
+    fig.canvas.draw()
+    for axis, color in ((ax1.yaxis, "#22d3ee"),) + (((ax2.yaxis, "#f59e0b"),) if show_lr else ()):
+        for label in list(axis.get_ticklabels()) + [axis.get_offset_text()]:
+            label.set_color(color)
+    fig.savefig(str(out_path), facecolor=fig.get_facecolor())
     plt.close(fig)
     return Path(out_path)

@@ -111,6 +111,14 @@ class TrainingWidget {
     this.draw();
   }
 
+  noteEvent(event) {
+    eventCount += 1;
+    if (eventCount === 1 || eventCount % 200 === 0)
+      console.log("[yue2-monitor] events received:", eventCount, event.type, event.run || "");
+    const stamp = new Date().toLocaleTimeString();
+    this.setStatus(`${event.run || "run"} · ${event.type} step ${event.step ?? "-"} · ${stamp}`);
+  }
+
   runFilter() {
     const widget = (this.node.widgets || []).find((w) => w.name === "run");
     const value = widget ? (widget.value ?? "") : "";
@@ -124,6 +132,7 @@ class TrainingWidget {
 
   update(event) {
     if (!this.accepts(event)) return;
+    this.noteEvent(event);
     // A new run name means a fresh training: clear before applying the
     // (self-contained, full-history) event.
     if (event.run && event.run !== this.lastRun) {
@@ -293,13 +302,21 @@ class TrainingWidget {
 }
 
 const widgets = new Map();
+let eventCount = 0;
+
+function comfyClassOf(node) {
+  return node.comfyClass || (node.constructor && node.constructor.comfyClass) || "";
+}
+
+console.log("[yue2-monitor] extension loaded");
 
 app.registerExtension({
   name: "Starnodes.YuE2Trainer.TrainingWidget",
 
   nodeCreated(node) {
-    const cls = node.constructor?.comfyClass || "";
+    const cls = comfyClassOf(node);
     if (cls !== TARGET_CLASS) return;
+    console.log("[yue2-monitor] attaching to node", node.id);
     node.setSize([Math.max(node.size[0], 420), Math.max(node.size[1], 300)]);
 
     const container = document.createElement("div");
