@@ -230,8 +230,8 @@ class YuE2ArtistARLoRATrainer:
         },'hidden':{
             'unique_id':('UNIQUE_ID',),
         }}
-    RETURN_TYPES = ('STRING','STRING','STRING')
-    RETURN_NAMES = ('ar_lora_path','training_log','training_log_path')
+    RETURN_TYPES = ('STRING','STRING')
+    RETURN_NAMES = ('ar_lora_path','training_log')
     FUNCTION = 'train'
     CATEGORY = CATEGORY
     OUTPUT_NODE = True
@@ -274,12 +274,34 @@ class YuE2ArtistARLoRATrainer:
                 del model
                 gc.collect()
                 if torch.cuda.is_available(): torch.cuda.empty_cache()
-        return path,'\n'.join(json.dumps(row) for row in records),str(target/'training.jsonl')
+        return path,'\n'.join(json.dumps(row) for row in records)
 
 
-NODE_CLASS_MAPPINGS = {cls.__name__:cls for cls in (YuE2MothersuperiorAssets,YuE2RealAudioSemanticDataset,YuE2ArtistARLoRATrainer)}
+class YuE2TrainingMonitor:
+    """Live training monitor: place anywhere in the workflow. It listens for
+    the trainer's WebSocket progress events and charts them in real time -
+    no input connection needed (training runs are identified by run name)."""
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {'required':{},
+                'optional':{
+                    'run':('STRING',{'default':'','tooltip':
+                        'Only show a training run whose output folder name matches this '
+                        '(e.g. tupac_ar_v1). Blank = follow the most recent active run.'}),
+                }}
+    RETURN_TYPES = ()
+    FUNCTION = 'monitor'
+    CATEGORY = CATEGORY
+    OUTPUT_NODE = True
+
+    def monitor(self,run=''):
+        return None
+
+
+NODE_CLASS_MAPPINGS = {cls.__name__:cls for cls in (YuE2MothersuperiorAssets,YuE2RealAudioSemanticDataset,YuE2ArtistARLoRATrainer,YuE2TrainingMonitor)}
 NODE_DISPLAY_NAME_MAPPINGS = {
     'YuE2MothersuperiorAssets':'YuE2 Mothersuperior Assets',
     'YuE2RealAudioSemanticDataset':'YuE2 Real Audio Semantic Dataset',
     'YuE2ArtistARLoRATrainer':'YuE2 Artist AR LoRA Trainer',
+    'YuE2TrainingMonitor':'YuE2 Training Monitor (live)',
 }

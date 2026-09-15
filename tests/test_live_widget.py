@@ -52,5 +52,18 @@ def test_trainer_node_schema_outputs(monkeypatch):
     from mothersuperior_nodes import YuE2ArtistARLoRATrainer
     spec = YuE2ArtistARLoRATrainer.INPUT_TYPES()
     assert 'unique_id' in spec.get('hidden', {})
-    assert YuE2ArtistARLoRATrainer.RETURN_TYPES == ('STRING', 'STRING', 'STRING')
-    assert YuE2ArtistARLoRATrainer.RETURN_NAMES == ('ar_lora_path', 'training_log', 'training_log_path')
+    assert YuE2ArtistARLoRATrainer.RETURN_TYPES == ('STRING', 'STRING')
+    assert YuE2ArtistARLoRATrainer.RETURN_NAMES == ('ar_lora_path', 'training_log')
+
+
+def test_monitor_node_schema(monkeypatch):
+    monkeypatch.setitem(sys.modules, 'folder_paths',
+                        types.SimpleNamespace(get_filename_list=lambda kind: []))
+    from mothersuperior_nodes import YuE2TrainingMonitor
+    spec = YuE2TrainingMonitor.INPUT_TYPES()
+    assert 'run' in spec.get('optional', {})
+    assert YuE2TrainingMonitor.RETURN_TYPES == ()
+    assert YuE2TrainingMonitor.OUTPUT_NODE is True
+    assert YuE2TrainingMonitor.FUNCTION == 'monitor'
+    assert YuE2TrainingMonitor().monitor() is None
+    assert YuE2TrainingMonitor().monitor(run='tupac_ar_v1') is None

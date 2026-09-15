@@ -1,15 +1,18 @@
-// Live training widget for the YuE2 Artist AR LoRA Trainer node.
+// Live training monitor node for YuE2 AR training.
 //
 // The trainer pushes yue2.training.progress events over the WebSocket
-// (status / point / eval / checkpoint / complete, each carrying the full
-// series history so a page refresh or missed message self-heals). This
-// extension attaches a DOM widget to the node and renders stats, a progress
-// bar, and a canvas chart with per-series display options.
+// (status / point / eval / checkpoint / complete, each tagged with its run
+// folder name and carrying the full series history so a page refresh or
+// missed message self-heals). This extension attaches a DOM widget to the
+// YuE2 Training Monitor node and renders stats, a progress bar, and a canvas
+// chart with per-series display options. The monitor's `run` widget filters
+// which training run to follow; blank = the most recent active run.
 
 import { app } from "../../../scripts/app.js";
 import { api } from "../../../scripts/api.js";
 
 const EVENT = "yue2.training.progress";
+const TARGET_CLASS = "YuE2TrainingMonitor";
 const OPTS_KEY = "yue2train.opts.v1";
 const COLORS = {
   bg: "#0b1220", grid: "#1e3a5f", text: "#9fb3c8",
@@ -107,7 +110,19 @@ class TrainingWidget {
     this.draw();
   }
 
+  runFilter() {
+    const widget = (this.node.widgets || []).find((w) => w.name === "run");
+    const value = widget ? (widget.value ?? "") : "";
+    return String(value || "").trim();
+  }
+
+  accepts(event) {
+    const filter = this.runFilter();
+    return !filter || !event.run || event.run === filter;
+  }
+
   update(event) {
+    if (!this.accepts(event)) return;
     if (event.history) this.history = event.history;
     if (event.total) this.total = event.total;
     if (event.type === "point" || event.type === "eval") {
@@ -276,7 +291,7 @@ app.registerExtension({
 
   nodeCreated(node) {
     const cls = node.constructor?.comfyClass || "";
-    if (cls !== "YuE2ArtistARLoRATrainer") return;
+    if (cls !== TARGET_CLASS) return;
     node.setSize([Math.max(node.size[0], 420), Math.max(node.size[1], 300)]);
 
     const container = document.createElement("div");

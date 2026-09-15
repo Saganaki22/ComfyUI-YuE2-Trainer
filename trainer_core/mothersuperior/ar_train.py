@@ -243,7 +243,7 @@ def train(model,tokenizer,artist,regularizer,output_dir,cfg,check_interrupt=lamb
         if report is None:
             return
         try:
-            report(event)
+            report({'run': output.name, **event})
         except Exception as exc:
             console.status(f'live widget update failed: {exc}')
     # Live chart preview: the record stream is re-parsed and re-rendered to a

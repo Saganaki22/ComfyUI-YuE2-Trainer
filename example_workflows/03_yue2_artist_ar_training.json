@@ -1,7 +1,7 @@
 {
   "id": "yue2-trainer-03-artist-ar-training",
   "revision": 0,
-  "last_node_id": 4,
+  "last_node_id": 5,
   "last_link_id": 4,
   "nodes": [
     {
@@ -220,6 +220,32 @@
         "smooth": 25,
         "show_raw": true,
         "show_lr": true
+      }
+    },
+    {
+      "id": 5,
+      "type": "YuE2TrainingMonitor",
+      "pos": [
+        460,
+        340
+      ],
+      "size": [
+        380,
+        60
+      ],
+      "flags": {},
+      "order": 4,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [],
+      "properties": {
+        "Node name for S&R": "YuE2TrainingMonitor"
+      },
+      "widgets_values": [
+        ""
+      ],
+      "widgets_values_named": {
+        "run": ""
       }
     }
   ],
