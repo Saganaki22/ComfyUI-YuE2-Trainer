@@ -305,6 +305,16 @@ app.registerExtension({
       clearInterval(timer);
       instance = new TrainingWidget(node, container);
       widgets.set(node.id, instance);
+      // The node must never shrink below the widget's natural height,
+      // otherwise the chart/options get clipped with no scrollbar.
+      const minW = 420;
+      const minH = Math.max(200, container.offsetHeight + 16);
+      const prevResize = node.onResize;
+      node.onResize = function () {
+        if (this.size[0] < minW) this.size[0] = minW;
+        if (this.size[1] < minH) this.size[1] = minH;
+        if (prevResize) prevResize.apply(this, arguments);
+      };
     }, 150);
 
     const prevRemove = node.onRemoved;
