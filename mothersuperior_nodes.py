@@ -46,6 +46,45 @@ def make_report(unique_id):
     return report
 
 
+def _register_training_model(model,rank):
+    """Register the training model in ComfyUI's loaded-models cache so memory
+    visualizers show its live VRAM as a model bar. Display-only: the trainer
+    manages devices itself and this static patcher is never dynamically
+    offloaded mid-run."""
+    try:
+        import torch
+        import comfy.model_management as mm
+        import comfy.model_patcher as mp
+        try:
+            from .trainer_core.mothersuperior.ar_train import TARGETS
+        except ImportError:
+            from trainer_core.mothersuperior.ar_train import TARGETS
+        if not torch.cuda.is_available():
+            return None
+        device = mm.get_torch_device()
+        # Bytes the training loop actually holds on the GPU: everything
+        # build_model moved, plus the LoRA A/B that inject() will add.
+        size = sum(t.numel()*t.element_size() for t in model.parameters() if t.is_cuda)
+        for name,mod in model.model.named_modules():
+            if any(name.endswith('.'+t) for t in TARGETS):
+                size += rank*(mod.in_features+mod.out_features)*4
+        patcher = mp.ModelPatcher(model.model,device,torch.device('cpu'),size=size)
+        mm.load_models_gpu([patcher])
+        return patcher
+    except Exception:
+        return None
+
+
+def _unregister_training_model(patcher):
+    if patcher is None:
+        return
+    try:
+        import comfy.model_management as mm
+        mm.unload_model_and_clones(patcher)
+    except Exception:
+        pass
+
+
 class YuE2MothersuperiorAssets:
     @classmethod
     def INPUT_TYPES(cls):
@@ -225,9 +264,11 @@ class YuE2ArtistARLoRATrainer:
                 resume_optimizer=resume_optimizer,
                 live_curve=live_curve,live_curve_path=str(Path(folder_paths.get_temp_directory())/'yue2_curve_live.png'))
             try:
+                patcher = _register_training_model(model,rank)
                 path,records = ar_train.train(model,tokenizer,dataset.items,regularizer,target,cfg,
                                               interrupt,progress_callback(),report=make_report(unique_id))
             finally:
+                _unregister_training_model(patcher)
                 del model
                 gc.collect()
                 if torch.cuda.is_available(): torch.cuda.empty_cache()
