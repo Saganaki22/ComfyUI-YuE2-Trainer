@@ -165,16 +165,18 @@ class YuE2ArtistARLoRATrainer:
             'dataset':('YUE2_SEMANTIC_DATASET',{'tooltip':'Connect YuE2 Real Audio Semantic Dataset.'}),
             'assets':('YUE2_MS_ASSETS',{'tooltip':'Connect YuE2 Mothersuperior Assets (provides the minted regularizer pack).'}),
             'checkpoint':(folder_paths.get_filename_list('checkpoints'),{'tooltip':
-                'Native YuE2 all-in-one bf16 checkpoint (models/checkpoints) — the same file '
+                'Native YuE2 all-in-one checkpoint (models/checkpoints) — the same file '
                 'you generate with (yue2_3b_bf16.safetensors). Quantized checkpoints are rejected.'}),
             'output_name':('STRING',{'default':'artist_ar','tooltip':
                 'New subfolder name in models/loras. Saves last.safetensors, best.safetensors '
                 'and step-N checkpoints. Existing folders are never overwritten — pick a fresh '
                 'name per run. Default: artist_ar.'}),
             'steps':('INT',{'default':1600,'min':1,'max':100000,'tooltip':
-                'Total optimizer steps (upstream recipe compares checkpoints from step 600). '
-                'Past ~1,500 steps the model memorizes the training songs (upstream warning). '
-                'Default: 1600. Recommended: 300-1600; watch minted_val_loss stay flat.'}),
+                'Total optimizer steps; upstream compares checkpoints from step 600 and '
+                'later reported 5000 steps applied at strength 2.0 works best. Earlier '
+                'guidance warned of memorization past ~1500 on small sets — the minted '
+                'regularizer keeps grammar safe either way; watch the val line and pick '
+                'a checkpoint by ear. Default: 1600.'}),
             'rank':('INT',{'default':64,'min':1,'max':256,'tooltip':
                 'LoRA rank of the float32 A/B matrices (attention q/k/v/o + MLP gate/up/down, '
                 'all 28 AR layers). Upstream trains rank 64. '
