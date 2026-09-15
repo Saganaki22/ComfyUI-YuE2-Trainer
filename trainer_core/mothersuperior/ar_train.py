@@ -10,6 +10,7 @@ import math
 import os
 from pathlib import Path
 import random
+import sys
 import time
 import warnings
 
@@ -28,6 +29,76 @@ from .serialization import save_tensors
 log = logging.getLogger('yue2_trainer.artist')
 TARGETS = ('self_attn.q_proj','self_attn.k_proj','self_attn.v_proj','self_attn.o_proj',
            'mlp.gate_proj','mlp.up_proj','mlp.down_proj')
+
+
+class _Console:
+    """Compact console sink: one in-place step line, full lines for events.
+
+    The raw JSONL records stay in training.jsonl unchanged; the console gets
+    a tqdm-style `\\r` line for steps and normal log lines for anything a
+    user should see in the scrollback (evals, checkpoints, config, resume).
+    """
+    BAR_WIDTH = 14
+
+    def __init__(self):
+        self.started = None
+        self._last_len = 0
+
+    def _write_line(self):
+        """Terminate the in-place step line so the next message starts fresh."""
+        if self._last_len:
+            sys.stdout.write('\n')
+            sys.stdout.flush()
+            self._last_len = 0
+
+    def _step_line(self, text):
+        pad = max(0, self._last_len - len(text))
+        sys.stdout.write('\r' + text + ' ' * pad)
+        sys.stdout.flush()
+        self._last_len = len(text)
+
+    def status(self, message):
+        self._write_line()
+        log.info('%s', message)
+
+    def configuration(self, data):
+        cfg = data.get('config', {})
+        self._write_line()
+        log.info('AR config: %.1fM params, %d targets, steps=%d rank=%d lr=%g '
+                 'artist_ratio=%.2f max_length=%d evaluate_every=%d seed=%d',
+                 data.get('trainable_parameters', 0) / 1e6,
+                 len(data.get('targets', [])), cfg.get('steps'), cfg.get('rank'),
+                 cfg.get('learning_rate'), cfg.get('artist_ratio'),
+                 cfg.get('max_length'), cfg.get('evaluate_every'), cfg.get('seed'))
+
+    def training(self, data, total):
+        if self.started is None:
+            self.started = time.time()
+        step = data.get('step', 0)
+        elapsed = max(time.time() - self.started, 1e-6)
+        done = min(step, total)
+        filled = round(self.BAR_WIDTH * done / total) if total else 0
+        bar = '━' * filled + '░' * (self.BAR_WIDTH - filled)
+        parts = [f'step {step:>5d}/{total} {bar}']
+        if data.get('artist_loss') is not None:
+            parts.append(f'artist {data["artist_loss"]:.4f}')
+        if data.get('minted_loss') is not None:
+            parts.append(f'minted {data["minted_loss"]:.4f}')
+        parts.append(f'lr {data.get("lr", 0):.2e}')
+        parts.append(f'{elapsed / max(done, 1):.2f}s/it')
+        self._step_line('  '.join(parts))
+
+    def evaluation(self, data, best=None):
+        self._write_line()
+        msg = (f'[eval] step {data.get("step")}  artist {data.get("artist_loss"):.4f}  '
+               f'minted_val {data.get("minted_val_loss"):.4f}')
+        if best is not None:
+            msg += f'  best {best:.4f}'
+        log.info('%s', msg)
+
+    def checkpoint(self, message):
+        self._write_line()
+        log.info('%s', message)
 
 
 class ARLoRALinear(nn.Module):
@@ -156,6 +227,7 @@ def train(model,tokenizer,artist,regularizer,output_dir,cfg,check_interrupt=lamb
     output = Path(output_dir)
     output.mkdir(parents=True,exist_ok=False)
     records = []
+    console = _Console()
     # Live chart preview: the record stream is re-parsed and re-rendered to a
     # fixed temp PNG every few seconds (atomic replace); the Training Curve
     # node's frontend extension polls that file while the prompt runs.
@@ -188,12 +260,20 @@ def train(model,tokenizer,artist,regularizer,output_dir,cfg,check_interrupt=lamb
             os.replace(tmp,live_p)
         except Exception as exc:
             live_failed = True
-            log.warning('live curve preview disabled: %s',exc)
+            console.status(f'live curve preview disabled: {exc}')
     def record(data):
         records.append(data)
         with (output/'training.jsonl').open('a',encoding='utf-8') as handle:
             handle.write(json.dumps(data)+'\n')
-        log.info('%s',data)
+        kind = data.get('kind')
+        if kind == 'configuration':
+            console.configuration(data)
+        elif kind == 'training':
+            console.training(data,cfg.steps)
+        elif kind == 'evaluation':
+            console.evaluation(data)
+        else:
+            console.status(json.dumps(data))
         live_lines.append(json.dumps(data))
         maybe_live()
     @torch.no_grad()
@@ -219,6 +299,7 @@ def train(model,tokenizer,artist,regularizer,output_dir,cfg,check_interrupt=lamb
         save_tensors(path,native,dict(format='comfyui-native-lora',branch='yue2-ar',rank=cfg.rank,
             alpha=cfg.rank,steps=step,source='Mothersuperior/ar_lora.py',license='CC-BY-NC-4.0',
             nonzero_modules=inspection['nonzero_modules']))
+        console.checkpoint(f'[save] {path.name} (step {step})')
         return path
     best = evaluate(0)
     record(dict(kind='configuration',trainable_parameters=count,targets=list(modules),config=vars(cfg)))
