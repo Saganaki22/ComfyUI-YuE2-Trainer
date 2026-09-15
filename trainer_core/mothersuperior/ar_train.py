@@ -129,6 +129,8 @@ class TrainConfig:
     device: str = 'cuda'
     live_curve: bool = True
     live_curve_path: str = ''
+    resume_from: str = ''
+    resume_optimizer: bool = True
 
 
 def build_model(path,device='cuda'):
@@ -224,8 +226,14 @@ def train(model,tokenizer,artist,regularizer,output_dir,cfg,check_interrupt=lamb
     count = sum(p.numel() for p in params)
     log.info('AR trainable parameters=%d targets=%d; NAR frozen',count,len(modules))
     optimizer = torch.optim.AdamW(params,lr=cfg.learning_rate,weight_decay=0.,betas=(.9,.95))
-    output = Path(output_dir)
-    output.mkdir(parents=True,exist_ok=False)
+    from . import ar_state
+    resume_folder = Path(cfg.resume_from) if getattr(cfg,'resume_from','') else None
+    output = resume_folder if resume_folder is not None else Path(output_dir)
+    if resume_folder is not None:
+        if not output.is_dir():
+            raise ValueError(f'Resume folder not found: {output}')
+    else:
+        output.mkdir(parents=True,exist_ok=False)
     records = []
     console = _Console()
     # Live chart preview: the record stream is re-parsed and re-rendered to a
@@ -301,36 +309,102 @@ def train(model,tokenizer,artist,regularizer,output_dir,cfg,check_interrupt=lamb
             nonzero_modules=inspection['nonzero_modules']))
         console.checkpoint(f'[save] {path.name} (step {step})')
         return path
-    best = evaluate(0)
+    def persist_state(step):
+        try:
+            ar_state.save_state(output/ar_state.STATE_FILE,modules,params,optimizer,step,best,cfg,
+                                artist_count=len(artist),py_rng=rng.getstate())
+        except Exception as exc:
+            console.status(f'warning: trainer state not saved: {exc}')
+    # ---- resume ----------------------------------------------------------
+    start_step = 1
+    best = float('inf')
+    if resume_folder is not None:
+        state_path = output/ar_state.STATE_FILE
+        if state_path.exists():
+            tensors,meta = ar_state.load_state(state_path)
+            if int(meta.get('rank',cfg.rank)) != cfg.rank:
+                raise ValueError(f'Resumed run used rank {meta.get("rank")}; this trainer is rank {cfg.rank}')
+            ar_state.copy_ab_into_modules(modules,tensors)
+            if cfg.resume_optimizer and meta.get('optimizer') == 'adamw':
+                ar_state.restore_optimizer(optimizer,params,tensors,int(meta.get('opt_step',0)))
+            ar_state.restore_rng(meta)
+            if meta.get('python_rng'):
+                state = json.loads(meta['python_rng'])
+                rng.setstate((state[0],tuple(state[1]),state[2]))
+            start_step = int(meta.get('step',0))+1
+            best = float(meta.get('best','inf'))
+            recorded = int(meta.get('artist_count',0) or 0)
+            if recorded and recorded != len(artist):
+                console.status(f'warning: artist set changed since the original run '
+                               f'({recorded} -> {len(artist)} songs); resume is approximate')
+            record(dict(kind='resumed',step=start_step-1,best=best,mode='full',
+                        optimizer='adamw' if meta.get('optimizer')=='adamw' else 'none'))
+        else:
+            last = output/'last.safetensors'
+            if not last.exists():
+                raise ValueError(f'No {ar_state.STATE_FILE} or last.safetensors in {output}')
+            from safetensors.torch import load_file
+            with safe_open(str(last),framework='pt') as handle:
+                native_meta = handle.metadata() or {}
+            native = load_file(last)
+            if int(float(native_meta.get('rank',cfg.rank))) != cfg.rank:
+                raise ValueError(f'Resumed checkpoint used rank {native_meta.get("rank")}; '
+                                 f'this trainer is rank {cfg.rank}')
+            ar_state.copy_ab_into_modules(modules,ar_state.native_to_ab(native))
+            start_step = int(native_meta.get('steps',0))+1
+            record(dict(kind='resumed',step=start_step-1,mode='weights-only'))
+        if start_step >= cfg.steps:
+            raise ValueError(f'Run already reached step {start_step-1}; set steps above that '
+                             f'to continue training (steps is the target total on resume)')
+        console.status(f'resuming from step {start_step} (best artist eval {best:.4f})')
+    if not resume_folder:
+        best = evaluate(0)
     record(dict(kind='configuration',trainable_parameters=count,targets=list(modules),config=vars(cfg)))
-    for step in range(1,cfg.steps+1):
-        check_interrupt()
-        multiplier = min(1,step/max(1,cfg.warmup_steps))*(.2+.8*.5*(1+math.cos(math.pi*min(step,cfg.schedule_steps)/cfg.schedule_steps)))
-        for group in optimizer.param_groups:
-            group['lr'] = cfg.learning_rate*multiplier
-        losses = {'artist':[],'minted':[]}
-        for _ in range(cfg.grad_accum):
+    persist_state(start_step-1)
+    # ---- training loop ---------------------------------------------------
+    last_step = start_step-1
+    try:
+        for step in range(start_step,cfg.steps+1):
             check_interrupt()
-            source = 'artist' if rng.random()<cfg.artist_ratio else 'minted'
-            item = rng.choice(artist if source=='artist' else minted)
-            ids,lp = sequence(item,tokenizer,cfg.max_length)
-            loss = lm_loss(model,ids,lp)
-            if not torch.isfinite(loss): raise ValueError('Non-finite AR loss')
-            (loss/cfg.grad_accum).backward()
-            losses[source].append(loss.detach().item())
-        norm = torch.nn.utils.clip_grad_norm_(params,1.).item()
-        if not math.isfinite(norm): raise ValueError('Non-finite AR gradients')
-        optimizer.step()
-        optimizer.zero_grad(set_to_none=True)
-        record(dict(kind='training',step=step,lr=optimizer.param_groups[0]['lr'],grad_norm=norm,
-                    **{key+'_loss':sum(value)/len(value) if value else None for key,value in losses.items()}))
-        if step%cfg.evaluate_every == 0 or step == cfg.steps:
-            metric = evaluate(step)
-            if metric < best:
-                best = metric
-                save('best',step)
-            save('last',step)
-        if cfg.save_from and step >= cfg.save_from and (step-cfg.save_from)%cfg.save_every == 0:
-            save(f'step-{step}',step)
-        progress(step,cfg.steps)
+            multiplier = min(1,step/max(1,cfg.warmup_steps))*(.2+.8*.5*(1+math.cos(math.pi*min(step,cfg.schedule_steps)/cfg.schedule_steps)))
+            for group in optimizer.param_groups:
+                group['lr'] = cfg.learning_rate*multiplier
+            losses = {'artist':[],'minted':[]}
+            for _ in range(cfg.grad_accum):
+                check_interrupt()
+                source = 'artist' if rng.random()<cfg.artist_ratio else 'minted'
+                item = rng.choice(artist if source=='artist' else minted)
+                ids,lp = sequence(item,tokenizer,cfg.max_length)
+                loss = lm_loss(model,ids,lp)
+                if not torch.isfinite(loss): raise ValueError('Non-finite AR loss')
+                (loss/cfg.grad_accum).backward()
+                losses[source].append(loss.detach().item())
+            norm = torch.nn.utils.clip_grad_norm_(params,1.).item()
+            if not math.isfinite(norm): raise ValueError('Non-finite AR gradients')
+            optimizer.step()
+            optimizer.zero_grad(set_to_none=True)
+            record(dict(kind='training',step=step,lr=optimizer.param_groups[0]['lr'],grad_norm=norm,
+                        **{key+'_loss':sum(value)/len(value) if value else None for key,value in losses.items()}))
+            if step%cfg.evaluate_every == 0 or step == cfg.steps:
+                metric = evaluate(step)
+                if metric < best:
+                    best = metric
+                    save('best',step)
+                save('last',step)
+                persist_state(step)
+            if cfg.save_from and step >= cfg.save_from and (step-cfg.save_from)%cfg.save_every == 0:
+                save(f'step-{step}',step)
+            last_step = step
+            progress(step,cfg.steps)
+    except Exception:
+        # Cancel or failure: keep everything needed to continue the run.
+        if last_step > 0:
+            try:
+                save('interrupt',last_step)
+            except Exception as exc:
+                console.status(f'warning: interrupt checkpoint not saved: {exc}')
+            persist_state(last_step)
+        console.status(f'interrupted at step {last_step} — resume_from="{output}" '
+                       f'to continue (steps must be > {last_step})')
+        raise
     return str(output/'last.safetensors'),records

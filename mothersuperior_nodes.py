@@ -151,6 +151,16 @@ class YuE2ArtistARLoRATrainer:
             'save_every':('INT',{'default':200,'min':1,'max':10000,'tooltip':
                 'Spacing between numbered checkpoints once save_from is reached. '
                 'Default: 200. Use 50-100 for fine-grained checkpoint picking by ear.'}),
+            'resume_from':('STRING',{'default':'','tooltip':
+                'Path to an existing run folder (models/loras/<name>) to continue it after '
+                'a cancel or crash. Cancelled runs auto-save an interrupt checkpoint and '
+                'full trainer state, so nothing since the last step is lost. On resume, '
+                'steps is the target TOTAL and must exceed the resumed step. Blank = fresh run; '
+                'output_name is ignored when resuming (checkpoints write back into this folder).'}),
+            'resume_optimizer':('BOOLEAN',{'default':True,'tooltip':
+                'On resume, restore the AdamW moments for an exact continuation. '
+                'Default: on. Off = weights-only resume (fresh optimizer, slightly different '
+                'trajectory, ~40% smaller state file).'}),
             'live_curve':('BOOLEAN',{'default':True,'tooltip':
                 'Rewrite a live chart PNG every few seconds while training runs; the '
                 'YuE2 Training Curve node in this workflow displays it in real time '
@@ -164,15 +174,21 @@ class YuE2ArtistARLoRATrainer:
     OUTPUT_NODE = True
 
     def train(self,dataset,assets,checkpoint,output_name,steps,rank,learning_rate,artist_ratio,seed,
-              grad_accum=2,max_length=12288,evaluate_every=100,save_from=600,save_every=200,live_curve=True):
+              grad_accum=2,max_length=12288,evaluate_every=100,save_from=600,save_every=200,
+              resume_from='',resume_optimizer=True,live_curve=True):
         import folder_paths
         from .trainer_core import native_ckpt
         from .trainer_core.mothersuperior import ar_train
         from .trainer_core.mothersuperior.regularizer import load_pack
-        if not output_name or output_name in ('.','..') or any(c in output_name for c in '\\/:*?"<>|'):
-            raise ValueError('output_name must be a single valid folder name')
-        target = Path(folder_paths.get_folder_paths('loras')[0])/output_name
-        if target.exists(): raise FileExistsError(f'Choose a new output_name: {target}')
+        if resume_from.strip():
+            target = Path(resume_from.strip().strip('"'))
+            if not target.is_dir():
+                raise ValueError(f'resume folder not found: {target}')
+        else:
+            if not output_name or output_name in ('.','..') or any(c in output_name for c in '\\/:*?"<>|'):
+                raise ValueError('output_name must be a single valid folder name')
+            target = Path(folder_paths.get_folder_paths('loras')[0])/output_name
+            if target.exists(): raise FileExistsError(f'Choose a new output_name: {target}')
         ckpt = folder_paths.get_full_path_or_raise('checkpoints',checkpoint)
         if not native_ckpt.is_native_yue2_checkpoint(ckpt): raise ValueError('Select the native bf16 YuE2 checkpoint')
         regularizer = load_pack(assets.regularizer)
@@ -183,6 +199,8 @@ class YuE2ArtistARLoRATrainer:
             cfg = ar_train.TrainConfig(steps=steps,rank=rank,learning_rate=learning_rate,artist_ratio=artist_ratio,
                 seed=seed,grad_accum=grad_accum,max_length=max_length,evaluate_every=evaluate_every,
                 save_from=save_from,save_every=save_every,
+                resume_from=str(target) if resume_from.strip() else '',
+                resume_optimizer=resume_optimizer,
                 live_curve=live_curve,live_curve_path=str(Path(folder_paths.get_temp_directory())/'yue2_curve_live.png'))
             try:
                 path,records = ar_train.train(model,tokenizer,dataset.items,regularizer,target,cfg,interrupt,progress_callback())
